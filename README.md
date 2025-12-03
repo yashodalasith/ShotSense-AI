@@ -128,6 +128,8 @@ pip install mmengine
 mim install mmcv==2.1.0
 mim install mmdet==3.2.0
 mim install mmpose==1.2.0 --no-deps
+pip install munkres
+pip install xtcocotools
 ```
 
 ---
@@ -141,13 +143,15 @@ mkdir -p features/SHOT_CLASSIFICATION_SYSTEM/rtmpose_models
 Download config:
 
 ```bash
-wget -P features/SHOT_CLASSIFICATION_SYSTEM/rtmpose_models   https://github.com/open-mmlab/mmpose/tree/main/configs/body_2d_keypoint/rtmpose/coco/rtmpose-m_8xb256-420e_coco-256x192.py
+curl -L -o features/SHOT_CLASSIFICATION_SYSTEM/rtmpose_models/rtmpose-m_8xb256-420e_coco-256x192.py \
+https://raw.githubusercontent.com/open-mmlab/mmpose/main/configs/body_2d_keypoint/rtmpose/coco/rtmpose-m_8xb256-420e_coco-256x192.py
 ```
 
 Download checkpoint:
 
 ```bash
-wget -P features/SHOT_CLASSIFICATION_SYSTEM/rtmpose_models   https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-aic-coco_pt-aic-coco_420e-256x192-63eb25f7_20230126.pth
+curl -L -o features/SHOT_CLASSIFICATION_SYSTEM/rtmpose_models/rtmpose-m_simcc-aic-coco_420e-256x192-63eb25f7_20230126.pth \
+https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-aic-coco_pt-aic-coco_420e-256x192-63eb25f7_20230126.pth
 ```
 
 ---
