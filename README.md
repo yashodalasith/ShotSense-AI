@@ -152,7 +152,66 @@ wget -P features/SHOT_CLASSIFICATION_SYSTEM/rtmpose_models   https://download.op
 
 ---
 
-### **7. Run the FastAPI Server**
+### **7. Dataset Setup & Model Training**
+
+This project uses the "Cricket Shots IPL 2023" dataset.
+
+**Step 1: Download**
+
+Download the dataset manually from Kaggle:
+[Cricket Shots IPL 2023](https://www.kaggle.com/taarunsridhar/cricket-shots-ipl-2023)
+
+**Step 2: Extract**
+
+Extract the dataset into the folder relative to the repo root:
+
+```
+CricAI-api/datasets/cricket-shots
+```
+
+The folder structure should look like:
+
+```
+SHOTSENSE-AI/datasets/cricket-shots/
+├── cut/
+│   ├── video1.mp4
+│   ├── video2.mp4
+│   └── ...
+├── drive/
+│   ├── video1.mp4
+│   └── ...
+├── flick/
+├── misc/
+├── pull/
+├── slog/
+└── sweep/
+```
+
+`config.py` already points to:
+
+```python
+DATASET_PATH = "datasets/cricket-shots"
+```
+
+**Step 3: Train the Model**
+
+Once the dataset is ready, you can train the Random Forest model:
+
+```bash
+# Make sure you're in the project root
+cd CricAI-api
+
+# Run training
+python features/SHOT_CLASSIFICATION_SYSTEM/model_training/train_model.py
+```
+
+After training, the model and scaler will be saved automatically to:
+
+```
+features/SHOT_CLASSIFICATION_SYSTEM/trained_models/
+```
+
+### **8. Run the FastAPI Server**
 
 ```bash
 python main.py
