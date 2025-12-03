@@ -71,7 +71,7 @@ execution.
 
 ### **1. Install Python**
 
-Download Python 3.8+ from python.org\
+Download Python 3.8 - 3.10 from python.org\
 ➡️ Make sure to enable **"Add Python to PATH"**
 
 Verify installation:
@@ -124,10 +124,10 @@ pip install -r requirements.txt
 
 ```bash
 pip install openmim
-mim install mmengine
-mim install "mmcv>=2.0.0"
-mim install "mmdet>=3.0.0"
-mim install "mmpose>=1.0.0"
+pip install mmengine
+mim install mmcv==2.1.0
+mim install mmdet==3.2.0
+mim install mmpose==1.2.0 --no-deps
 ```
 
 ---
