@@ -60,3 +60,7 @@ $RECYCLE.BIN/
 # Misc
 *.bak
 *.tmp
+
+# ML / model files
+*.pth
+*.pt
