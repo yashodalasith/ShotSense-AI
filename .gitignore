@@ -65,3 +65,4 @@ $RECYCLE.BIN/
 *.pth
 *.pt
 datasets/
+*.pkl

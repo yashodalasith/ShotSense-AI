@@ -150,8 +150,7 @@ class ModelTrainer:
 
 def main():
     """Main training function"""
-    # Update this path to your Kaggle dataset location
-    DATASET_PATH = "path/to/your/kaggle/dataset"
+    from features.SHOT_CLASSIFICATION_SYSTEM.utils.config import DATASET_PATH
     
     if not os.path.exists(DATASET_PATH):
         print(f"Error: Dataset path not found: {DATASET_PATH}")

@@ -2,6 +2,8 @@
 Configuration file for Shot Classification System
 """
 
+import os
+
 # Shot types from your Kaggle dataset
 SHOT_TYPES = ['cut', 'drive', 'flick', 'misc', 'pull', 'slog', 'sweep']
 
@@ -47,3 +49,19 @@ RANDOM_FOREST_PARAMS = {
 DATASET_PATH = "datasets/cricket-shots" 
 MODEL_PATH = "features/SHOT_CLASSIFICATION_SYSTEM/trained_models/rf_model.pkl"
 SCALER_PATH = "features/SHOT_CLASSIFICATION_SYSTEM/trained_models/scaler.pkl"
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
+RTMPOSE_CONFIG = os.path.join(
+    BASE_DIR,
+    "SHOT_CLASSIFICATION_SYSTEM",
+    "rtmpose_models",
+    "rtmpose-m_8xb256-420e_coco-256x192.py"
+)
+
+RTMPOSE_CHECKPOINT = os.path.join(
+    BASE_DIR,
+    "SHOT_CLASSIFICATION_SYSTEM",
+    "rtmpose_models",
+    "rtmpose-m_simcc-aic-coco_420e-256x192-63eb25f7_20230126.pth"
+)

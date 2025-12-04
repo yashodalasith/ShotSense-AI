@@ -138,6 +138,7 @@ pip install xtcocotools
 
 ```bash
 mkdir -p features/SHOT_CLASSIFICATION_SYSTEM/rtmpose_models
+mkdir -p _base_
 ```
 
 Download config:
@@ -152,6 +153,13 @@ Download checkpoint:
 ```bash
 curl -L -o features/SHOT_CLASSIFICATION_SYSTEM/rtmpose_models/rtmpose-m_simcc-aic-coco_420e-256x192-63eb25f7_20230126.pth \
 https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-aic-coco_pt-aic-coco_420e-256x192-63eb25f7_20230126.pth
+```
+
+Download runtime:
+
+```bash
+curl -L -o _base_/default_runtime.py \
+https://raw.githubusercontent.com/open-mmlab/mmpose/main/configs/_base_/default_runtime.py
 ```
 
 ---

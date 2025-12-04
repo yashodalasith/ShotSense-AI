@@ -8,6 +8,10 @@ from typing import List, Dict, Tuple
 import cv2
 from mmpose.apis import init_model, inference_topdown
 from mmpose.structures import merge_data_samples
+from features.SHOT_CLASSIFICATION_SYSTEM.utils.config import (
+    RTMPOSE_CONFIG,
+    RTMPOSE_CHECKPOINT
+)
 
 
 class PoseEstimator:
@@ -23,9 +27,9 @@ class PoseEstimator:
         """
         # Default RTMPose-m model (good balance of speed and accuracy)
         if config_file is None:
-            config_file = 'rtmpose-m_8xb256-420e_coco-256x192.py'
+            config_file = RTMPOSE_CONFIG
         if checkpoint_file is None:
-            checkpoint_file = 'rtmpose-m_simcc-aic-coco_pt-aic-coco_420e-256x192-63eb25f7_20230126.pth'
+            checkpoint_file = RTMPOSE_CHECKPOINT
         
         print("Initializing RTMPose model...")
         self.model = init_model(config_file, checkpoint_file, device='cpu')
