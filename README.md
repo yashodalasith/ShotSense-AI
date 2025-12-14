@@ -231,10 +231,10 @@ python main.py
 
 If everything worked, you'll see:
 
-    INFO:     Uvicorn running on http://0.0.0.0:8000
+    INFO:     Uvicorn running on http://0.0.0.0:8001
     INFO:     Application startup complete
 
-Open Swagger Documentation: 👉 http://localhost:8000/docs
+Open Swagger Documentation: 👉 http://localhost:8001/docs
 
 ---
 
