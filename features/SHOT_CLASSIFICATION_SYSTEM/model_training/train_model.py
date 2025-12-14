@@ -109,6 +109,12 @@ class ModelTrainer:
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42, stratify=y
         )
+
+        # Save processed data for evaluation
+        np.savez('processed_dataset.npz',
+                X_train=X_train, X_test=X_test,
+                y_train=y_train, y_test=y_test)
+        print("Processed dataset saved for evaluation")
         
         print(f"Training samples: {len(X_train)}")
         print(f"Testing samples: {len(X_test)}")
