@@ -364,9 +364,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="shotclassify/ShotClassification" />
-      <Tabs.Screen name="shotsimilarity/ShotSimilarity" />
-      <Tabs.Screen name="legalitycheck/BowlingCheck" />
-      <Tabs.Screen name="prediction/Prediction" />
+      <Tabs.Screen name="stanceconsistency/StanceConsistency" />
     </Tabs>
   );
 }

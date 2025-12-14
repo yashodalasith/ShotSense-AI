@@ -22,7 +22,7 @@ import {
   analyzeShot,
   ShotType,
   AnalysisResult,
-} from "../../services/shotClassificationApi";
+} from "../../../services/shotClassificationApi";
 
 export default function ShotClassificationScreen() {
   const [shotTypes, setShotTypes] = useState<ShotType[]>([]);

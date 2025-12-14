@@ -3,9 +3,10 @@
  * Handles communication with FastAPI backend
  */
 import { Platform } from "react-native";
-
-// Update this with your actual API URL
-const API_BASE_URL = "http://localhost:8001"; // Change to your backend URL
+const API_BASE_URL =
+  Platform.OS === "android"
+    ? process.env.EXPO_PUBLIC_BATTING_SHOT_API_ANDROID
+    : process.env.EXPO_PUBLIC_BATTING_SHOT_API_LOCAL;
 
 export interface ShotType {
   value: string;
