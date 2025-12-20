@@ -73,3 +73,5 @@ evaluation_results/
 # NumPy data files
 *.npz
 *.npy
+
+trained_models/
