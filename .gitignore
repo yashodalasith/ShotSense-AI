@@ -66,3 +66,10 @@ $RECYCLE.BIN/
 *.pt
 datasets/
 *.pkl
+
+#evaluation results
+evaluation_results/
+
+# NumPy data files
+*.npz
+*.npy
