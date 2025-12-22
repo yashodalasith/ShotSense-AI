@@ -14,7 +14,7 @@ from typing import Dict, Tuple, List
 import json
 from datetime import datetime
 from features.SHOT_CLASSIFICATION_SYSTEM.utils.config import (
-    SHOT_TYPES, RANDOM_FOREST_PARAMS, MODEL_FOLDER_PATH, DATASET_PATH
+    SHOT_TYPES, RANDOM_FOREST_PARAMS, MODEL_FOLDER_PATH, DATASET_PATH, SUPPORTED_VIDEO_EXTENSIONS
 )
 
 import sys
@@ -107,7 +107,10 @@ class EnsembleTrainer:
                 print(f"Warning: Directory not found: {shot_dir}")
                 continue
             
-            video_files = [f for f in os.listdir(shot_dir) if f.endswith('.mp4')]
+            video_files = [
+                f for f in os.listdir(shot_dir)
+                if f.lower().endswith(SUPPORTED_VIDEO_EXTENSIONS)
+            ]
             print(f"\nProcessing {len(video_files)} videos for {shot_type}...")
             
             for idx, video_file in enumerate(video_files):

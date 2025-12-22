@@ -50,6 +50,11 @@ DATASET_PATH = "datasets/cricket-shots"
 MODEL_PATH = "features/SHOT_CLASSIFICATION_SYSTEM/trained_models/rf_model.pkl"
 MODEL_FOLDER_PATH = "features/SHOT_CLASSIFICATION_SYSTEM/trained_models"
 SCALER_PATH = "features/SHOT_CLASSIFICATION_SYSTEM/trained_models/scaler.pkl"
+SUPPORTED_VIDEO_EXTENSIONS = ('.mp4', '.avi', '.mov', '.mkv')
+
+def supported_extensions_str() -> str:
+    """Human-readable extensions for error messages"""
+    return ", ".join(ext.upper() for ext in SUPPORTED_VIDEO_EXTENSIONS)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
