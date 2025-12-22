@@ -105,7 +105,6 @@ class VisualFeedbackGenerator:
         y_offset = 30
         for i, mistake in enumerate(mistakes[:3]):  # Top 3 mistakes
             joint_id = mistake['joint_id']
-            
             # Get position near the joint
             if joint_id in self.joint_to_keypoints:
                 keypoint_names = self.joint_to_keypoints[joint_id]

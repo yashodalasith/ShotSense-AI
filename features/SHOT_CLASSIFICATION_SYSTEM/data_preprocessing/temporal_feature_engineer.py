@@ -1,17 +1,18 @@
 """
-Temporal Feature Engineer - Research Ready
+Temporal Feature Engineer - Research Ready with YOLO Integration
 Extracts temporal, motion-aware, and explainable pose features
 """
 
 import numpy as np
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import cv2
+from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.ball_detector import BallBatDetector
 
 
 class TemporalFeatureEngineer:
     """
     Extract temporal windowed features from pose sequences
-    Fixes overfitting by using motion dynamics instead of single-frame snapshots
+    Uses YOLO for accurate ball-bat contact detection
     """
     
     def __init__(self):
@@ -21,6 +22,10 @@ class TemporalFeatureEngineer:
             'left_wrist': 9, 'right_wrist': 10, 'left_hip': 11, 'right_hip': 12,
             'left_knee': 13, 'right_knee': 14, 'left_ankle': 15, 'right_ankle': 16
         }
+
+        # Initialize YOLO ball-bat detector
+        self.ball_detector = BallBatDetector()
+        print("✓ YOLO ball-bat detector initialized")
         
         # Critical angles for cricket shots (with expected ranges)
         self.angle_definitions = {
@@ -58,8 +63,29 @@ class TemporalFeatureEngineer:
         angle = np.arccos(np.clip(cos_angle, -1.0, 1.0))
         return np.degrees(angle)
     
-    def detect_shot_window(self, pose_sequence: List[Dict]) -> Tuple[int, int, int]:
+    def detect_shot_window_with_yolo(self, pose_sequence: List[Dict], 
+                                    frames: List[np.ndarray]) -> Tuple[int, int, int, Dict]:
         """
+        Detect shot window using YOLO ball-bat detection
+        
+        Returns:
+            (pre_idx, contact_idx, follow_idx, contact_metadata)
+        """
+        print("🎯 Using YOLO for accurate ball-bat contact detection...")
+        
+        contact_idx, contact_metadata = self.ball_detector.detect_contact_frame(frames, pose_sequence)
+        
+        pre_idx = max(0, contact_idx - 4)
+        follow_idx = min(len(pose_sequence) - 1, contact_idx + 3)
+        
+        detection_method = contact_metadata.get('detection_method', 'unknown')
+        print(f"✓ Contact detected at frame {contact_idx} (method: {detection_method})")
+        
+        return pre_idx, contact_idx, follow_idx, contact_metadata
+
+    def detect_shot_window_fallback(self, pose_sequence: List[Dict]) -> Tuple[int, int, int]:
+        """
+        Fallback method using hand velocity (when YOLO fails or frames unavailable)
         Detect shot execution window with 3 phases:
         - Pre-shot (stance)
         - Contact (shot moment)
@@ -160,15 +186,33 @@ class TemporalFeatureEngineer:
         
         return positions
     
-    def extract_temporal_features(self, pose_sequence: List[Dict]) -> Tuple[np.ndarray, Dict]:
+    def extract_temporal_features(self, pose_sequence: List[Dict], 
+                                 frames: Optional[List[np.ndarray]] = None) -> Tuple[np.ndarray, Dict]:
         """
         Extract complete temporal feature set with metadata
+        
+        Args:
+            pose_sequence: List of pose data dictionaries
+            frames: Optional list of video frames (for YOLO detection)
         
         Returns:
             (feature_vector, metadata_dict)
         """
         # Detect 3-phase window
-        pre_idx, contact_idx, follow_idx = self.detect_shot_window(pose_sequence)
+        if frames is not None and len(frames) == len(pose_sequence):
+            # Use YOLO for accurate ball-bat contact detection
+            pre_idx, contact_idx, follow_idx, contact_metadata = self.detect_shot_window_with_yolo(
+                pose_sequence, frames
+            )
+        else:
+            # Fallback to hand velocity method
+            print("⚠️  Frames not available, using fallback hand velocity detection")
+            pre_idx, contact_idx, follow_idx = self.detect_shot_window_fallback(pose_sequence)
+            contact_metadata = {
+                'detection_method': 'fallback_velocity',
+                'ball_detected': False,
+                'bat_detected': False
+            }
         
         pre_pose = pose_sequence[pre_idx]
         contact_pose = pose_sequence[contact_idx]
@@ -179,6 +223,7 @@ class TemporalFeatureEngineer:
             'pre_frame': pre_idx,
             'contact_frame': contact_idx,
             'follow_frame': follow_idx,
+            'contact_detection': contact_metadata,  # ADDED: YOLO detection info
             'angles': {},
             'velocities': {},
             'positions': {}

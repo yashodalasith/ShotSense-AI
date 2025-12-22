@@ -5,6 +5,7 @@ Handles HTTP endpoints for shot analysis
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse
 import os
 import tempfile
 from typing import Optional

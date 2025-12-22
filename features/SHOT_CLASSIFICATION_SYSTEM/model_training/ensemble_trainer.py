@@ -24,6 +24,8 @@ from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.frame_extractor impo
 from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.pose_estimator import PoseEstimator
 from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.temporal_feature_engineer import TemporalFeatureEngineer
 from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.data_augmentation import PoseAugmenter
+from features.SHOT_CLASSIFICATION_SYSTEM.utils.prototype_extractor import PrototypeExtractor
+from features.SHOT_CLASSIFICATION_SYSTEM.utils.keypoint_prototype_extractor import KeypointPrototypeExtractor
 
 
 class EnsembleTrainer:
@@ -35,6 +37,9 @@ class EnsembleTrainer:
         self.scaler = None
         self.label_encoder = None
         self.feature_names = None
+        # Storage for keypoints during dataset preparation
+        self.keypoints_cache = []
+        self.metadata_cache = []
         
         # Create model directories
         os.makedirs(f"{model_dir}/random_forest", exist_ok=True)
@@ -47,9 +52,16 @@ class EnsembleTrainer:
         self.pose_estimator = PoseEstimator()
         self.feature_engineer = TemporalFeatureEngineer()
         self.augmenter = PoseAugmenter(augmentation_factor=2)
+        self.prototype_extractor = PrototypeExtractor()
+        self.keypoint_extractor = KeypointPrototypeExtractor()
     
     def process_video(self, video_path: str) -> Tuple[np.ndarray, Dict]:
-        """Process video and extract temporal features"""
+        """
+        Process video and extract temporal features with YOLO
+        
+        Returns:
+            (features, metadata, contact_keypoints)
+        """
         # Extract frames
         frames, _ = self.frame_extractor.extract_frames(video_path)
         
@@ -57,9 +69,16 @@ class EnsembleTrainer:
         pose_sequence = self.pose_estimator.estimate_pose_batch(frames)
         
         # Extract temporal features
-        features, metadata = self.feature_engineer.extract_temporal_features(pose_sequence)
+        features, metadata = self.feature_engineer.extract_temporal_features(
+            pose_sequence,
+            frames 
+        )
         
-        return features, metadata
+        # Get contact frame keypoints for prototype extraction
+        contact_idx = metadata['contact_frame']
+        contact_keypoints = pose_sequence[contact_idx]['keypoints']
+        
+        return features, metadata, contact_keypoints
     
     def prepare_dataset(self, dataset_path: str, shot_types: List[str], 
                        use_augmentation: bool = True) -> Tuple[np.ndarray, np.ndarray]:
@@ -76,6 +95,10 @@ class EnsembleTrainer:
         """
         X = []
         y = []
+
+        # Clear caches
+        self.keypoints_cache = []
+        self.metadata_cache = []
         
         for shot_type in shot_types:
             shot_dir = os.path.join(dataset_path, shot_type)
@@ -94,9 +117,13 @@ class EnsembleTrainer:
                     if (idx + 1) % 10 == 0:
                         print(f"  {idx + 1}/{len(video_files)} completed")
                     
-                    features, _ = self.process_video(video_path)
+                    features, metadata, contact_keypoints = self.process_video(video_path)
                     X.append(features)
                     y.append(shot_type)
+
+                    # Cache keypoints and metadata
+                    self.keypoints_cache.append(contact_keypoints)
+                    self.metadata_cache.append(metadata)
                     
                 except Exception as e:
                     print(f"  Error processing {video_file}: {str(e)}")
@@ -109,6 +136,12 @@ class EnsembleTrainer:
         if use_augmentation:
             print(f"\nApplying data augmentation...")
             X, y = self.augmenter.augment_batch(X, y)
+
+            # Replicate keypoints for augmented samples
+            original_count = len(self.keypoints_cache)
+            for _ in range(self.augmenter.augmentation_factor):
+                self.keypoints_cache.extend(self.keypoints_cache[:original_count])
+                self.metadata_cache.extend(self.metadata_cache[:original_count])
         
         return X, y
     
@@ -207,6 +240,30 @@ class EnsembleTrainer:
             print(f"  Train Accuracy: {train_acc*100:.2f}%")
             print(f"  Test Accuracy: {test_acc*100:.2f}%")
         
+        # Extract and save prototypes WITH KEYPOINTS
+        print("\nExtracting prototypes with keypoints...")
+        # Combine train and test indices
+        all_indices = np.concatenate([
+            np.where(np.isin(np.arange(len(X)), np.arange(len(X_train))))[0],
+            np.where(np.isin(np.arange(len(X)), np.arange(len(X_train), len(X))))[0]
+        ])
+        
+        # Get corresponding keypoints and metadata
+        all_keypoints = [self.keypoints_cache[i] for i in all_indices]
+        all_metadata = [self.metadata_cache[i] for i in all_indices]
+        all_labels    = self.label_encoder.transform(y[all_indices])
+        
+        # Extract prototypes
+        prototypes = self.keypoint_extractor.extract_prototypes(
+            X[all_indices],
+            all_labels,
+            all_keypoints,
+            all_metadata,
+            self.label_encoder
+        )
+        importance = self.prototype_extractor.extract_feature_importance(self.models)
+        self.prototype_extractor.save_prototypes(prototypes, importance, self.model_dir)
+
         # Save models
         self.save_models()
         

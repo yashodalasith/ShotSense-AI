@@ -1,6 +1,6 @@
 """
-Batting Service - Research-Ready Intent Scoring
-Complete rewrite with temporal features, ensemble models, and visual feedback
+Complete Batting Service - Research Ready
+Uses actual prototype keypoints for visual feedback generation
 """
 
 import numpy as np
@@ -16,8 +16,8 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.frame_extractor import FrameExtractor
 from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.pose_estimator import PoseEstimator
 from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.temporal_feature_engineer import TemporalFeatureEngineer
-from features.SHOT_CLASSIFICATION_SYSTEM.utils.mistake_analyzer import MistakeAnalyzer
-from features.SHOT_CLASSIFICATION_SYSTEM.utils.visual_feedback_generator import VisualFeedbackGenerator
+from features.SHOT_CLASSIFICATION_SYSTEM.utils.model_based_mistake_analyzer import ModelBasedMistakeAnalyzer
+from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.skeleton_animator import SkeletonAnimator
 from features.SHOT_CLASSIFICATION_SYSTEM.utils.config import (
     MODEL_FOLDER_PATH
 )
@@ -38,23 +38,32 @@ class BattingService:
         with open(f"{model_dir}/ensemble/feature_names.json", 'r') as f:
             self.feature_names = json.load(f)
         
+        # Load prototypes (includes keypoints)
+        self.prototypes = joblib.load(f"{model_dir}/prototypes/shot_prototypes.pkl")
+        
         # Initialize components
         self.frame_extractor = FrameExtractor(fps=10)
         self.pose_estimator = PoseEstimator()
         self.feature_engineer = TemporalFeatureEngineer()
-        self.mistake_analyzer = MistakeAnalyzer()
-        self.visual_generator = VisualFeedbackGenerator()
+        
+        # Initialize analyzers
+        self.mistake_analyzer = ModelBasedMistakeAnalyzer(
+            prototypes_path=f"{model_dir}/prototypes/shot_prototypes.pkl",
+            feature_importance_path=f"{model_dir}/prototypes/feature_importance.pkl",
+            feature_names=self.feature_names
+        )
+        
+        self.skeleton_animator = SkeletonAnimator()
         
         # Initialize AI feedback (optional)
         api_key = os.getenv('GEMINI_API_KEY')
         self.ai_client = genai.Client(api_key=api_key) if api_key else None
         
-        print("Batting service initialized with ensemble models")
+        print("✓ Batting service initialized with prototype keypoints")
     
     def _load_models(self) -> Dict:
         """Load all trained models"""
         models = {}
-        
         for model_name in ['random_forest', 'xgboost', 'gradient_boosting']:
             model_path = f"{self.model_dir}/{model_name}/model_latest.pkl"
             if os.path.exists(model_path):
@@ -62,11 +71,12 @@ class BattingService:
                 print(f"✓ Loaded {model_name}")
             else:
                 raise FileNotFoundError(f"Model not found: {model_path}")
-        
         return models
     
     def process_video(self, video_path: str) -> Dict:
-        """Process video and extract temporal features with metadata"""
+        """
+        Process video and extract features with YOLO ball-bat detection
+        """
         # Extract frames
         frames, fps = self.frame_extractor.extract_frames(video_path)
         
@@ -74,7 +84,7 @@ class BattingService:
         pose_sequence = self.pose_estimator.estimate_pose_batch(frames)
         
         # Extract temporal features
-        features, metadata = self.feature_engineer.extract_temporal_features(pose_sequence)
+        features, metadata = self.feature_engineer.extract_temporal_features(pose_sequence, frames)
         
         # Store frames and poses for visual feedback
         contact_frame_idx = metadata['contact_frame']
@@ -130,7 +140,7 @@ class BattingService:
         }
     
     def calculate_intent_score(self, intended_shot: str, ensemble_proba: Dict[str, float]) -> float:
-        """Calculate intent execution score using ensemble probabilities"""
+        """Calculate intent execution score"""
         intended_prob = ensemble_proba.get(intended_shot, 0.0)
         max_prob = max(ensemble_proba.values())
         
@@ -140,6 +150,49 @@ class BattingService:
             score = 0.0
         
         return round(score, 2)
+    
+    def generate_visual_feedback(self, actual_keypoints: np.ndarray, 
+                                actual_scores: np.ndarray,
+                                intended_shot: str,
+                                mistakes: List[Dict]) -> Dict:
+        """
+        Generate complete visual feedback with ACTUAL prototype keypoints
+        """
+        # Get prototype keypoints for intended shot
+        if intended_shot in self.prototypes:
+            prototype_keypoints = self.prototypes[intended_shot]['keypoints']['mean']
+        else:
+            # Fallback: use actual keypoints
+            prototype_keypoints = actual_keypoints
+            print(f"⚠️  No prototype found for {intended_shot}, using actual pose")
+        
+        # 1. Generate 3D skeleton (actual execution with errors)
+        skeleton_3d = self.skeleton_animator.generate_3d_skeleton(
+            actual_keypoints,
+            mistakes,
+            view_angle=(30, 45)
+        )
+        
+        # 2. Generate comparison view (ACTUAL vs PROTOTYPE)
+        comparison_view = self.skeleton_animator.generate_comparison_view(
+            actual_keypoints,      # User's actual pose
+            prototype_keypoints,   # CORRECT: Learned prototype from training data
+            mistakes
+        )
+        
+        # 3. Generate 360° animation
+        animation_360 = self.skeleton_animator.generate_multi_angle_animation(
+            actual_keypoints,
+            mistakes
+        )
+        
+        return {
+            'skeleton_3d': skeleton_3d,
+            'comparison_view': comparison_view,
+            'animation_360': animation_360,
+            'prototype_used': intended_shot,
+            'prototype_samples': self.prototypes[intended_shot]['n_samples'] if intended_shot in self.prototypes else 0
+        }
     
     def generate_ai_feedback(self, intended_shot: str, predicted_shot: str,
                            intent_score: float, mistakes: List[Dict]) -> str:
@@ -151,25 +204,25 @@ class BattingService:
         try:
             # Prepare mistake summary
             mistake_summary = "\n".join([
-                f"- {m['joint']}: {m['issue']} (actual: {m['actual_angle']}, expected: {m['expected_range']})"
-                for m in mistakes[:5]
+                f"- {m['body_part']}: {m['explanation']}"
+                for m in mistakes[:3]
             ])
             
             prompt = f"""You are an expert cricket batting coach analyzing a player's shot execution.
 
 Player's Intent: {intended_shot.upper()}
 Actual Execution: {predicted_shot.upper()}
-Intent Score: {intent_score}% (how well they executed their intended shot)
+Intent Score: {intent_score}% (similarity to {self.prototypes[intended_shot]['n_samples']} correct {intended_shot} examples)
 
-Technical Issues Detected:
+Key Technical Issues (detected by biomechanical analysis):
 {mistake_summary if mistakes else "No major technical issues detected."}
 
 Provide coaching feedback in 2-3 concise sentences:
-1. Acknowledge what they did well (if applicable)
-2. Point out the main technical issue affecting their intent score
+1. Start with acknowledgment
+2. Point out the main biomechanical issue
 3. Give ONE specific, actionable correction
 
-Be direct, supportive, and coaching-focused. No bullet points."""
+Be direct, supportive, coaching-focused and technically accurate. No bullet points."""
 
             response = self.ai_client.models.generate_content(
                 model="gemini-2.5-flash",  
@@ -185,22 +238,23 @@ Be direct, supportive, and coaching-focused. No bullet points."""
     
     def _generate_rule_based_feedback(self, intended_shot: str, predicted_shot: str,
                                      intent_score: float, mistakes: List[Dict]) -> str:
-        """Generate rule-based feedback (fallback)"""
+        """Fallback feedback"""
+        n_samples = self.prototypes.get(intended_shot, {}).get('n_samples', 0)
+        
         if intent_score >= 85:
-            base = f"Excellent {intended_shot} execution! Your technique is nearly perfect."
+            base = f"Excellent {intended_shot}! Your biomechanics match our {n_samples} reference examples."
         elif intent_score >= 70:
-            base = f"Good {intended_shot} attempt. Your technique is solid with minor adjustments needed."
+            base = f"Good {intended_shot} attempt. Your execution is close to the learned prototype."
         elif intent_score >= 50:
-            base = f"Your {intended_shot} execution needs refinement. The model detected it as {predicted_shot}."
+            base = f"Your {intended_shot} deviates from the {n_samples} training examples."
         else:
-            base = f"Your shot significantly deviated from the intended {intended_shot}, appearing as {predicted_shot}."
+            base = f"Significant deviation from correct {intended_shot} form (appeared as {predicted_shot})."
         
         if mistakes:
             top_issue = mistakes[0]
-            addition = f" Main issue: {top_issue['issue']}. {top_issue['recommendation']}"
-            return base + addition
+            return f"{base} Main issue: {top_issue['explanation']} {top_issue['recommendation']}"
         
-        return base + " Keep practicing to maintain consistency!"
+        return base
     
     def analyze_shot(self, video_path: str, intended_shot: str) -> Dict:
         """
@@ -225,29 +279,28 @@ Be direct, supportive, and coaching-focused. No bullet points."""
             ensemble_result['ensemble_probabilities']
         )
         
-        # Analyze mistakes
+        # Analyze mistakes (model-based)
         mistakes = self.mistake_analyzer.analyze_execution(
             intended_shot,
             ensemble_result['final_prediction'],
-            video_data['metadata']['angles']
+            video_data['features']
         )
         
-        # Generate visual feedback
-        visual_feedback = self.visual_generator.generate_feedback_images(
-            video_data['contact_frame'],
+        # Generate visual feedback (with ACTUAL prototypes)
+        visual_feedback = self.generate_visual_feedback(
             video_data['contact_keypoints'],
             video_data['contact_scores'],
+            intended_shot,
             mistakes
         )
         
-        # Generate AI coaching feedback
+        # Generate coaching feedback
         coaching_feedback = self.generate_ai_feedback(
             intended_shot,
             ensemble_result['final_prediction'],
             intent_score,
             mistakes
         )
-        
         # Get correction summary
         correction_summary = self.mistake_analyzer.generate_correction_summary(
             mistakes, intended_shot
@@ -260,10 +313,10 @@ Be direct, supportive, and coaching-focused. No bullet points."""
             'intent_score': intent_score,
             'is_correct': ensemble_result['final_prediction'] == intended_shot,
             
-            # Visual feedback
-            'images': visual_feedback,
+            # Visual feedback (3D skeletons, NOT real frames)
+            'visual_feedback': visual_feedback,
             
-            # Detailed analysis
+            # Model-based analysis (NOT hardcoded angles)
             'mistake_analysis': mistakes,
             'correction_summary': correction_summary,
             'coaching_feedback': coaching_feedback,
@@ -272,12 +325,11 @@ Be direct, supportive, and coaching-focused. No bullet points."""
             'ensemble_probabilities': ensemble_result['ensemble_probabilities'],
             'model_predictions': ensemble_result['individual_predictions'],
             
-            # Metadata
-            'contact_frame_index': video_data['metadata']['contact_frame'],
+            # Transparency
             'analysis_metadata': {
-                'pre_frame': video_data['metadata']['pre_frame'],
                 'contact_frame': video_data['metadata']['contact_frame'],
-                'follow_frame': video_data['metadata']['follow_frame']
+                'prototype_samples': self.prototypes.get(intended_shot, {}).get('n_samples', 0),
+                'analysis_method': 'prototype_comparison'
             }
         }
         
