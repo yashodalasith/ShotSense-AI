@@ -29,3 +29,5 @@ mmengine
 
 # === 4. Additional Libraries ===
 google-genai
+python-dotenv
+roboflow

@@ -5,8 +5,9 @@ import time
 
 from models.schemas import HealthResponse
 from routers import batting as batting_router
+from dotenv import load_dotenv
 
-
+load_dotenv()
 app = FastAPI(
     title="ShotSense API",
     description="AI-Based Cricket Training App API",
