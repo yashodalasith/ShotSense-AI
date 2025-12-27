@@ -13,13 +13,40 @@ export interface ShotType {
   label: string;
 }
 
+export interface Keypoint3D {
+  joint: string;
+  index: number;
+  position: { x: number; y: number; z: number };
+}
+
+export interface Mistake {
+  joint_id: string;
+  body_part: string;
+  severity: "critical" | "major" | "minor";
+  severity_color: string;
+  glow_intensity: number;
+  explanation: string;
+  recommendation: string;
+}
+
+export interface VisualFeedback {
+  keypoints_3d: {
+    actual: Keypoint3D[];
+    prototype: Keypoint3D[];
+    format?: string;
+  };
+  mistakes: Mistake[];
+  // other fields like legacy_images, etc.
+}
+
 export interface AnalysisResult {
   intended_shot: string;
   predicted_shot: string;
   intent_score: number;
-  probability_distribution: Record<string, number>;
-  feedback: string;
   is_correct: boolean;
+  visual_feedback: VisualFeedback;
+  coaching_feedback: string;
+  ensemble_probabilities: Record<string, number>;
 }
 
 export interface ApiResponse<T> {
