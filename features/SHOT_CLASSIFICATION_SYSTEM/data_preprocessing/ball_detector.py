@@ -436,6 +436,4 @@ class BallBatDetector:
             int(xyxy[2]),  # x2
             int(xyxy[3])   # y2
         ])
-        print(self.yolo_ball_model.names)
-        print(conf)
         return bbox, conf
