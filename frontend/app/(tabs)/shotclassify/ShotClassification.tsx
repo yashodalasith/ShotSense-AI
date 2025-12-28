@@ -1,6 +1,6 @@
 /**
  * Shot Classification Screen - React Native
- * Complete 3D Avatar Implementation
+ * Complete 3D Human Avatar with Biomechanical Indicators
  */
 
 import React, { useState, useEffect, useRef } from "react";
@@ -14,12 +14,12 @@ import {
   Alert,
   Modal,
   Dimensions,
-  Animated as RNAnimated,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { GLView } from "expo-gl";
 import * as THREE from "three";
+import { Renderer } from "expo-three";
 import Animated, {
   FadeInUp,
   FadeInDown,
@@ -38,7 +38,7 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// 3D Avatar Component
+// 3D Avatar Component with Human Mannequin
 interface Keypoint3D {
   joint: string;
   index: number;
@@ -48,7 +48,7 @@ interface Keypoint3D {
 interface Mistake {
   joint_id: string;
   body_part: string;
-  severity: "critical" | "major" | "minor";
+  severity: "critical" | "major" | "minor" | "negligible";
   severity_color: string;
   glow_intensity: number;
   explanation: string;
@@ -71,130 +71,300 @@ const Avatar3D: React.FC<Avatar3DProps> = ({
   const onContextCreate = async (gl: WebGLRenderingContext) => {
     const { drawingBufferWidth: width, drawingBufferHeight: height } = gl;
 
-    // Scene setup
-    const renderer = new THREE.WebGLRenderer({ context: gl });
+    const renderer = new Renderer({ gl });
     renderer.setSize(width, height);
     renderer.setClearColor(0x0a0a0a);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 800);
+    camera.position.set(0, 0, 250);
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    const pointLight = new THREE.PointLight(0xff4081, 1, 1000);
-    pointLight.position.set(200, 200, 200);
-    scene.add(pointLight);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    keyLight.position.set(100, 200, 150);
+    scene.add(keyLight);
 
-    // Materials
-    const jointMaterial = new THREE.MeshPhongMaterial({
-      color: isPrototype ? 0x4caf50 : 0xff4081,
-      emissive: isPrototype ? 0x2e7d32 : 0xd81b60,
-      transparent: true,
-      opacity: isPrototype ? 0.4 : 1,
-    });
+    const fillLight = new THREE.DirectionalLight(0x4488ff, 0.3);
+    fillLight.position.set(-100, 50, -50);
+    scene.add(fillLight);
 
-    const mistakeJoints = new Set(mistakes?.map((m) => m.joint_id) || []);
-
-    // Create joints
+    // Calculate center and scale
+    const center = new THREE.Vector3(0, 0, 0);
     keypoints.forEach((kp) => {
-      const isMistake = mistakeJoints.has(kp.joint);
-      const geometry = new THREE.SphereGeometry(isMistake ? 12 : 8, 16, 16);
+      center.x += kp.position.x;
+      center.y += kp.position.y;
+      center.z += kp.position.z;
+    });
+    center.divideScalar(keypoints.length);
 
-      let material;
-      let mistake;
-      if (isMistake) {
-        mistake = mistakes.find((m) => m.joint_id === kp.joint);
-        if (mistake) {
-          const color = new THREE.Color(mistake.severity_color);
-          material = new THREE.MeshPhongMaterial({
-            color: color,
-            emissive: color,
-            emissiveIntensity: mistake.glow_intensity,
+    let maxDistance = 0;
+    keypoints.forEach((kp) => {
+      const dist = new THREE.Vector3(
+        kp.position.x,
+        kp.position.y,
+        kp.position.z
+      ).distanceTo(center);
+      if (dist > maxDistance) maxDistance = dist;
+    });
+    const SCALE = 80 / maxDistance;
+
+    // Helper to get scaled position
+    const getScaledPos = (kp: Keypoint3D) =>
+      new THREE.Vector3(
+        (kp.position.x - center.x) * SCALE,
+        (kp.position.y - center.y) * SCALE,
+        (kp.position.z - center.z) * SCALE
+      );
+
+    // Get joint by name
+    const getJoint = (name: string) => keypoints.find((k) => k.joint === name);
+
+    // Create human body parts
+    const bodyColor = isPrototype ? 0x66bb6a : 0xff6090;
+    const bodyMaterial = new THREE.MeshPhongMaterial({
+      color: bodyColor,
+      transparent: true,
+      opacity: isPrototype ? 0.5 : 0.85,
+      emissive: isPrototype ? 0x2e7d32 : 0xd81b60,
+      emissiveIntensity: 0.2,
+    });
+
+    // HEAD
+    const nose = getJoint("nose");
+    if (nose) {
+      const headPos = getScaledPos(nose);
+      const headGeometry = new THREE.SphereGeometry(8, 16, 16);
+      const head = new THREE.Mesh(headGeometry, bodyMaterial);
+      head.position.copy(headPos);
+      scene.add(head);
+    }
+
+    // TORSO
+    const leftShoulder = getJoint("left_shoulder");
+    const rightShoulder = getJoint("right_shoulder");
+    const leftHip = getJoint("left_hip");
+    const rightHip = getJoint("right_hip");
+
+    if (leftShoulder && rightShoulder && leftHip && rightHip) {
+      const lsPos = getScaledPos(leftShoulder);
+      const rsPos = getScaledPos(rightShoulder);
+      const lhPos = getScaledPos(leftHip);
+      const rhPos = getScaledPos(rightHip);
+
+      const torsoCenter = new THREE.Vector3()
+        .addVectors(lsPos, rsPos)
+        .add(lhPos)
+        .add(rhPos)
+        .multiplyScalar(0.25);
+
+      const torsoHeight = lsPos.distanceTo(lhPos);
+      const torsoWidth = lsPos.distanceTo(rsPos);
+
+      const torsoGeometry = new THREE.BoxGeometry(
+        torsoWidth * 1.2,
+        torsoHeight,
+        torsoWidth * 0.6
+      );
+      const torso = new THREE.Mesh(torsoGeometry, bodyMaterial);
+      torso.position.copy(torsoCenter);
+      scene.add(torso);
+    }
+
+    // LIMBS - Create cylinders between joints
+    const createLimb = (
+      start: Keypoint3D | undefined,
+      end: Keypoint3D | undefined,
+      radius: number
+    ) => {
+      if (!start || !end) return;
+
+      const startPos = getScaledPos(start);
+      const endPos = getScaledPos(end);
+
+      const direction = new THREE.Vector3().subVectors(endPos, startPos);
+      const length = direction.length();
+      const midpoint = new THREE.Vector3()
+        .addVectors(startPos, endPos)
+        .multiplyScalar(0.5);
+
+      const geometry = new THREE.CylinderGeometry(radius, radius, length, 8, 1);
+      const limb = new THREE.Mesh(geometry, bodyMaterial);
+
+      limb.position.copy(midpoint);
+      limb.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        direction.normalize()
+      );
+
+      scene.add(limb);
+    };
+
+    // Arms
+    createLimb(leftShoulder, getJoint("left_elbow"), 2.5);
+    createLimb(getJoint("left_elbow"), getJoint("left_wrist"), 2);
+    createLimb(rightShoulder, getJoint("right_elbow"), 2.5);
+    createLimb(getJoint("right_elbow"), getJoint("right_wrist"), 2);
+
+    // Legs
+    createLimb(leftHip, getJoint("left_knee"), 3);
+    createLimb(getJoint("left_knee"), getJoint("left_ankle"), 2.5);
+    createLimb(rightHip, getJoint("right_knee"), 3);
+    createLimb(getJoint("right_knee"), getJoint("right_ankle"), 2.5);
+
+    // MISTAKE INDICATORS - Only if not prototype
+    if (!isPrototype && mistakes.length > 0) {
+      const mistakeMap = new Map(
+        mistakes.map((m) => [m.joint_id.toLowerCase(), m])
+      );
+
+      // Joint mapping for mistake IDs to actual joint names
+      const jointMapping: { [key: string]: string } = {
+        back_elbow: "left_elbow",
+        front_elbow: "right_elbow",
+        back_wrist: "left_wrist",
+        front_wrist: "right_wrist",
+        torso_bend: "nose", // Center of torso
+        left_hip: "left_hip",
+        right_hip: "right_hip",
+      };
+
+      mistakes.forEach((mistake) => {
+        const jointName = jointMapping[mistake.joint_id] || mistake.joint_id;
+        const joint = getJoint(jointName);
+
+        if (joint) {
+          const pos = getScaledPos(joint);
+
+          // Glowing sphere at mistake location
+          const glowGeometry = new THREE.SphereGeometry(6, 16, 16);
+          const glowMaterial = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(mistake.severity_color),
             transparent: true,
-            opacity: 0.9,
+            opacity: 0.7,
           });
-        } else {
-          material = jointMaterial;
+          const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+          glow.position.copy(pos);
+          scene.add(glow);
+
+          // Outer glow ring
+          const ringGeometry = new THREE.SphereGeometry(10, 16, 16);
+          const ringMaterial = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(mistake.severity_color),
+            transparent: true,
+            opacity: 0.3,
+          });
+          const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+          ring.position.copy(pos);
+          scene.add(ring);
+
+          // Arrow pointing to mistake
+          const arrowDir = new THREE.Vector3(1, 1, 0.5).normalize();
+          const arrowLength = 20;
+          const arrowStart = pos
+            .clone()
+            .add(arrowDir.clone().multiplyScalar(15));
+
+          const arrowGeometry = new THREE.ConeGeometry(2, 8, 8);
+          const arrowMaterial = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(mistake.severity_color),
+          });
+          const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+          arrow.position.copy(arrowStart);
+          arrow.lookAt(pos);
+          arrow.rotateX(Math.PI / 2);
+          scene.add(arrow);
+
+          // Line from arrow to joint
+          const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+            arrowStart,
+            pos,
+          ]);
+          const lineMaterial = new THREE.LineBasicMaterial({
+            color: new THREE.Color(mistake.severity_color),
+            linewidth: 2,
+          });
+          const line = new THREE.Line(lineGeometry, lineMaterial);
+          scene.add(line);
         }
-      } else {
-        material = jointMaterial;
-      }
+      });
+    }
 
-      const joint = new THREE.Mesh(geometry, material);
-      joint.position.set(kp.position.x - 512, kp.position.y, kp.position.z);
-      scene.add(joint);
-
-      // Glow effect for mistakes
-      if (isMistake && mistake) {
-        const glowGeometry = new THREE.SphereGeometry(18, 16, 16);
-        const glowMaterial = new THREE.MeshBasicMaterial({
-          color: mistake.severity_color,
-          transparent: true,
-          opacity: 0.2,
-        });
-        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-        glow.position.copy(joint.position);
-        scene.add(glow);
-      }
+    // Ground plane (cricket pitch)
+    const groundGeometry = new THREE.PlaneGeometry(200, 200);
+    const groundMaterial = new THREE.MeshPhongMaterial({
+      color: 0x2a4a2a,
+      transparent: true,
+      opacity: 0.3,
     });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -80;
+    scene.add(ground);
 
-    // Draw connections
-    const connections = [
-      ["left_shoulder", "right_shoulder"],
-      ["left_shoulder", "left_elbow"],
-      ["left_elbow", "left_wrist"],
-      ["right_shoulder", "right_elbow"],
-      ["right_elbow", "right_wrist"],
-      ["left_shoulder", "left_hip"],
-      ["right_shoulder", "right_hip"],
-      ["left_hip", "right_hip"],
-      ["left_hip", "left_knee"],
-      ["left_knee", "left_ankle"],
-      ["right_hip", "right_knee"],
-      ["right_knee", "right_ankle"],
-    ];
-
-    connections.forEach(([from, to]) => {
-      const fromKp = keypoints.find((k) => k.joint === from);
-      const toKp = keypoints.find((k) => k.joint === to);
-
-      if (fromKp && toKp) {
-        const points = [
-          new THREE.Vector3(
-            fromKp.position.x - 512,
-            fromKp.position.y,
-            fromKp.position.z
-          ),
-          new THREE.Vector3(
-            toKp.position.x - 512,
-            toKp.position.y,
-            toKp.position.z
-          ),
-        ];
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({
-          color: isPrototype ? 0x66bb6a : 0xff4081,
-          linewidth: 2,
-          transparent: true,
-          opacity: isPrototype ? 0.3 : 0.8,
-        });
-        const line = new THREE.Line(geometry, material);
-        scene.add(line);
-      }
+    // Crease lines
+    const creaseGeometry = new THREE.PlaneGeometry(2, 100);
+    const creaseMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.6,
     });
+    const crease = new THREE.Mesh(creaseGeometry, creaseMaterial);
+    crease.rotation.x = -Math.PI / 2;
+    crease.position.y = -79.5;
+    scene.add(crease);
 
-    // Animation loop
-    let angle = 0;
+    // Cricket bat (if not prototype)
+    if (!isPrototype) {
+      const rightWrist = getJoint("right_wrist");
+      if (rightWrist) {
+        const wristPos = getScaledPos(rightWrist);
+
+        // Bat blade
+        const batBladeGeometry = new THREE.BoxGeometry(2, 25, 8);
+        const batBladeMaterial = new THREE.MeshPhongMaterial({
+          color: 0xd4a574,
+          emissive: 0x8b6f47,
+          emissiveIntensity: 0.2,
+        });
+        const batBlade = new THREE.Mesh(batBladeGeometry, batBladeMaterial);
+        batBlade.position.copy(wristPos);
+        batBlade.position.y -= 15;
+        scene.add(batBlade);
+
+        // Bat handle
+        const batHandleGeometry = new THREE.CylinderGeometry(1, 1, 15, 8);
+        const batHandleMaterial = new THREE.MeshPhongMaterial({
+          color: 0x1a1a1a,
+        });
+        const batHandle = new THREE.Mesh(batHandleGeometry, batHandleMaterial);
+        batHandle.position.copy(wristPos);
+        batHandle.position.y += 8;
+        scene.add(batHandle);
+      }
+    }
+
+    // Animation - subtle rotation
+    let angle = isPrototype ? Math.PI / 4 : 0;
+    let time = 0;
     const render = () => {
       requestAnimationFrame(render);
-      angle += 0.005;
-      camera.position.x = Math.sin(angle) * 800;
-      camera.position.z = Math.cos(angle) * 800;
+
+      time += 0.01;
+      angle += 0.003;
+
+      // Gentle rotation
+      camera.position.x = Math.sin(angle) * 250;
+      camera.position.z = Math.cos(angle) * 250;
+
+      // Subtle up-down sway
+      camera.position.y = Math.sin(time * 0.5) * 10;
+
       camera.lookAt(0, 0, 0);
       renderer.render(scene, camera);
+      (gl as any).endFrameEXP();
     };
     render();
   };
@@ -229,10 +399,8 @@ export default function ShotClassificationScreen() {
 
   useEffect(() => {
     if (result) {
-      // Animate score
       scoreAnim.value = withTiming(result.intent_score, { duration: 1500 });
 
-      // Counter animation
       let start = 0;
       const end = result.intent_score;
       const duration = 1500;
@@ -296,8 +464,9 @@ export default function ShotClassificationScreen() {
     transform: [{ scale: buttonScale.value }],
   }));
 
-  function capitalize(severity: string) {
-    throw new Error("Function not implemented.");
+  function capitalize(text: string) {
+    if (!text) return "";
+    return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
   return (
@@ -538,7 +707,13 @@ export default function ShotClassificationScreen() {
                               ],
                             ]}
                           >
-                            <Text style={styles.mistakeSeverityText}>
+                            <Text
+                              style={[
+                                styles.mistakeSeverityText,
+                                mistake.severity === "minor" &&
+                                  styles.mistakeSeverityTextMinor,
+                              ]}
+                            >
                               {mistake.severity}
                             </Text>
                           </View>
@@ -643,7 +818,13 @@ export default function ShotClassificationScreen() {
                       ],
                     ]}
                   >
-                    <Text style={styles.mistakeSeverityText}>
+                    <Text
+                      style={[
+                        styles.mistakeSeverityText,
+                        showMistakeModal.severity === "minor" &&
+                          styles.mistakeSeverityTextMinor,
+                      ]}
+                    >
                       {showMistakeModal.severity}
                     </Text>
                   </View>
@@ -809,7 +990,7 @@ const styles = StyleSheet.create({
   },
   uploadSubtitle: {
     fontSize: 12,
-    color: "#999",
+    color: "#060606ff",
   },
 
   // Analyze Button
@@ -925,7 +1106,7 @@ const styles = StyleSheet.create({
   },
   avatar3D: {
     width: "100%",
-    height: 300,
+    height: 350,
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#0a0a0a",
@@ -978,6 +1159,9 @@ const styles = StyleSheet.create({
   mistakeSeverityMinor: {
     backgroundColor: "#f1c40f",
   },
+  mistakeSeverityNegligible: {
+    backgroundColor: "#95a5a6",
+  },
   mistakeSeverityText: {
     fontSize: 11,
     fontWeight: "700",
@@ -985,7 +1169,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   mistakeSeverityTextMinor: {
-    color: "#000", // minor has dark text
+    color: "#000",
   },
   mistakeExplanation: {
     fontSize: 14,
@@ -1080,6 +1264,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 23, 68, 0.2)",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 10,
   },
   modalCloseText: {
     color: "#fff",
