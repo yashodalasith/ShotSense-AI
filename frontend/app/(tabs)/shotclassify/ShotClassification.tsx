@@ -73,21 +73,21 @@ const Avatar3D: React.FC<Avatar3DProps> = ({
 
     const renderer = new Renderer({ gl });
     renderer.setSize(width, height);
-    renderer.setClearColor(0x0a0a0a);
+    renderer.setClearColor(0xf8f9ff);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
     camera.position.set(0, 0, 250);
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
     keyLight.position.set(100, 200, 150);
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0x4488ff, 0.3);
+    const fillLight = new THREE.DirectionalLight(0x6366f1, 0.4);
     fillLight.position.set(-100, 50, -50);
     scene.add(fillLight);
 
@@ -123,12 +123,12 @@ const Avatar3D: React.FC<Avatar3DProps> = ({
     const getJoint = (name: string) => keypoints.find((k) => k.joint === name);
 
     // Create human body parts
-    const bodyColor = isPrototype ? 0x66bb6a : 0xff6090;
+    const bodyColor = isPrototype ? 0x10b981 : 0x6366f1;
     const bodyMaterial = new THREE.MeshPhongMaterial({
       color: bodyColor,
       transparent: true,
       opacity: isPrototype ? 0.5 : 0.85,
-      emissive: isPrototype ? 0x2e7d32 : 0xd81b60,
+      emissive: isPrototype ? 0x059669 : 0x4f46e5,
       emissiveIntensity: 0.2,
     });
 
@@ -226,7 +226,7 @@ const Avatar3D: React.FC<Avatar3DProps> = ({
         front_elbow: "right_elbow",
         back_wrist: "left_wrist",
         front_wrist: "right_wrist",
-        torso_bend: "nose", // Center of torso
+        torso_bend: "nose",
         left_hip: "left_hip",
         right_hip: "right_hip",
       };
@@ -295,7 +295,7 @@ const Avatar3D: React.FC<Avatar3DProps> = ({
     // Ground plane (cricket pitch)
     const groundGeometry = new THREE.PlaneGeometry(200, 200);
     const groundMaterial = new THREE.MeshPhongMaterial({
-      color: 0x2a4a2a,
+      color: 0x86efac,
       transparent: true,
       opacity: 0.3,
     });
@@ -307,7 +307,7 @@ const Avatar3D: React.FC<Avatar3DProps> = ({
     // Crease lines
     const creaseGeometry = new THREE.PlaneGeometry(2, 100);
     const creaseMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
+      color: 0x3b82f6,
       transparent: true,
       opacity: 0.6,
     });
@@ -337,7 +337,7 @@ const Avatar3D: React.FC<Avatar3DProps> = ({
         // Bat handle
         const batHandleGeometry = new THREE.CylinderGeometry(1, 1, 15, 8);
         const batHandleMaterial = new THREE.MeshPhongMaterial({
-          color: 0x1a1a1a,
+          color: 0x1e293b,
         });
         const batHandle = new THREE.Mesh(batHandleGeometry, batHandleMaterial);
         batHandle.position.copy(wristPos);
@@ -429,7 +429,7 @@ export default function ShotClassificationScreen() {
 
   const pickVideo = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: "videos",
       quality: 1,
     });
 
@@ -473,7 +473,7 @@ export default function ShotClassificationScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Hero Section */}
       <LinearGradient
-        colors={["rgba(255, 23, 68, 0.2)", "rgba(255, 64, 129, 0.1)"]}
+        colors={["rgba(99, 102, 241, 0.15)", "rgba(139, 92, 246, 0.1)"]}
         style={styles.hero}
       >
         <Animated.View entering={FadeInDown.duration(800)}>
@@ -520,8 +520,8 @@ export default function ShotClassificationScreen() {
                 <LinearGradient
                   colors={
                     isActive
-                      ? ["#ff1744", "#ff4081"]
-                      : ["rgba(255, 23, 68, 0.1)", "rgba(255, 23, 68, 0.05)"]
+                      ? ["#6366f1", "#8b5cf6"]
+                      : ["rgba(99, 102, 241, 0.08)", "rgba(139, 92, 246, 0.06)"]
                   }
                   style={[styles.shotChip, isActive && styles.shotChipActive]}
                 >
@@ -547,8 +547,8 @@ export default function ShotClassificationScreen() {
           <LinearGradient
             colors={
               videoUri
-                ? ["#4caf50", "#66bb6a"]
-                : ["rgba(255, 23, 68, 0.1)", "rgba(255, 64, 129, 0.1)"]
+                ? ["#10b981", "#34d399"]
+                : ["rgba(99, 102, 241, 0.08)", "rgba(139, 92, 246, 0.08)"]
             }
             style={styles.uploadArea}
           >
@@ -573,7 +573,7 @@ export default function ShotClassificationScreen() {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={["#d50000", "#ff1744"]}
+            colors={["#6366f1", "#8b5cf6"]}
             style={[
               styles.analyzeButton,
               (!videoUri || !selectedShot || analyzing) &&
@@ -642,7 +642,7 @@ export default function ShotClassificationScreen() {
             <View style={styles.avatarContainer}>
               <View style={styles.avatarWrapper}>
                 <LinearGradient
-                  colors={["#ff1744", "#ff4081"]}
+                  colors={["#6366f1", "#8b5cf6"]}
                   style={styles.avatarLabel}
                 >
                   <Text style={styles.avatarLabelText}>Your Form</Text>
@@ -656,7 +656,7 @@ export default function ShotClassificationScreen() {
 
               <View style={styles.avatarWrapper}>
                 <LinearGradient
-                  colors={["#4caf50", "#66bb6a"]}
+                  colors={["#10b981", "#34d399"]}
                   style={styles.avatarLabel}
                 >
                   <Text style={styles.avatarLabelText}>Perfect Form</Text>
@@ -733,7 +733,7 @@ export default function ShotClassificationScreen() {
           {/* AI Feedback */}
           <Animated.View entering={FadeInUp.delay(400)}>
             <LinearGradient
-              colors={["rgba(76, 175, 80, 0.1)", "rgba(102, 187, 106, 0.1)"]}
+              colors={["rgba(16, 185, 129, 0.1)", "rgba(52, 211, 153, 0.08)"]}
               style={[styles.card, styles.feedbackCard]}
             >
               <Text style={styles.feedbackIcon}>💬</Text>
@@ -761,7 +761,7 @@ export default function ShotClassificationScreen() {
                     <Text style={styles.probLabel}>{shot}</Text>
                     <View style={styles.probBarBg}>
                       <LinearGradient
-                        colors={["#ff1744", "#ff4081"]}
+                        colors={["#6366f1", "#8b5cf6"]}
                         style={[
                           styles.probBarFill,
                           { width: `${prob * 100}%` },
@@ -856,7 +856,7 @@ export default function ShotClassificationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#ffffff",
   },
 
   // Hero Section
@@ -869,14 +869,14 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 32,
     fontWeight: "900",
-    color: "#ff1744",
+    color: "#6366f1",
     letterSpacing: 2,
     textAlign: "center",
     marginBottom: 8,
   },
   heroSubtitle: {
     fontSize: 14,
-    color: "#ff80ab",
+    color: "#8b5cf6",
     textAlign: "center",
     marginBottom: 24,
   },
@@ -892,11 +892,11 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: "900",
-    color: "#ff4081",
+    color: "#6366f1",
   },
   statLabel: {
     fontSize: 10,
-    color: "#999",
+    color: "#94a3b8",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginTop: 4,
@@ -904,23 +904,28 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: "rgba(26, 10, 20, 0.6)",
+    backgroundColor: "#ffffff",
     borderRadius: 20,
     padding: 20,
     marginHorizontal: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(255, 23, 68, 0.2)",
+    borderColor: "rgba(99, 102, 241, 0.15)",
+    shadowColor: "#6366f1",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#fff",
+    color: "#1e293b",
     marginBottom: 6,
   },
   cardSubtitle: {
     fontSize: 13,
-    color: "#ff80ab",
+    color: "#8b5cf6",
     marginBottom: 16,
   },
 
@@ -935,24 +940,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: "rgba(255, 23, 68, 0.3)",
+    borderColor: "rgba(99, 102, 241, 0.2)",
     minWidth: (SCREEN_WIDTH - 72) / 3,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
   shotChipActive: {
-    borderColor: "#ff4081",
-    shadowColor: "#ff4081",
+    borderColor: "#6366f1",
+    shadowColor: "#6366f1",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   shotChipText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#ff80ab",
+    color: "#8b5cf6",
   },
   shotChipTextActive: {
     color: "#fff",
@@ -973,7 +978,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 2,
     borderStyle: "dashed",
-    borderColor: "rgba(255, 23, 68, 0.3)",
+    borderColor: "rgba(99, 102, 241, 0.2)",
   },
   uploadIcon: {
     fontSize: 40,
@@ -985,12 +990,12 @@ const styles = StyleSheet.create({
   uploadTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#fff",
+    color: "#1e293b",
     marginBottom: 4,
   },
   uploadSubtitle: {
     fontSize: 12,
-    color: "#060606ff",
+    color: "#64748b",
   },
 
   // Analyze Button
@@ -1004,9 +1009,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 18,
     borderRadius: 16,
-    shadowColor: "#ff1744",
+    shadowColor: "#6366f1",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
@@ -1034,8 +1039,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderRadius: 100,
     borderWidth: 12,
-    borderColor: "#2a2a2a",
-    backgroundColor: "rgba(255, 23, 68, 0.1)",
+    borderColor: "#e0e7ff",
+    backgroundColor: "rgba(99, 102, 241, 0.05)",
   },
   scoreContent: {
     alignItems: "center",
@@ -1043,11 +1048,11 @@ const styles = StyleSheet.create({
   scoreValue: {
     fontSize: 48,
     fontWeight: "900",
-    color: "#ff1744",
+    color: "#6366f1",
   },
   scoreLabel: {
     fontSize: 11,
-    color: "#ff80ab",
+    color: "#8b5cf6",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -1059,12 +1064,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: 16,
-    backgroundColor: "rgba(255, 23, 68, 0.05)",
+    backgroundColor: "rgba(99, 102, 241, 0.05)",
     borderRadius: 12,
   },
   detailLabel: {
     fontSize: 14,
-    color: "#999",
+    color: "#64748b",
     fontWeight: "600",
   },
   detailValue: {
@@ -1075,14 +1080,14 @@ const styles = StyleSheet.create({
   detailValueIntended: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#ff4081",
+    color: "#6366f1",
     textTransform: "uppercase",
   },
   detailValueCorrect: {
-    color: "#4caf50",
+    color: "#10b981",
   },
   detailValueIncorrect: {
-    color: "#ff9800",
+    color: "#f59e0b",
   },
 
   // 3D Avatar
@@ -1109,7 +1114,9 @@ const styles = StyleSheet.create({
     height: 350,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#f8f9ff",
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.1)",
   },
 
   // Mistakes
@@ -1120,9 +1127,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    backgroundColor: "rgba(255, 23, 68, 0.05)",
+    backgroundColor: "rgba(99, 102, 241, 0.04)",
     borderRadius: 16,
     gap: 12,
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.08)",
   },
   mistakeIndicator: {
     width: 8,
@@ -1141,7 +1150,7 @@ const styles = StyleSheet.create({
   mistakePart: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#fff",
+    color: "#1e293b",
     flex: 1,
   },
   mistakeSeverity: {
@@ -1151,16 +1160,16 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   mistakeSeverityCritical: {
-    backgroundColor: "#e74c3c",
+    backgroundColor: "#ef4444",
   },
   mistakeSeverityMajor: {
-    backgroundColor: "#f39c12",
+    backgroundColor: "#f97316",
   },
   mistakeSeverityMinor: {
-    backgroundColor: "#f1c40f",
+    backgroundColor: "#fbbf24",
   },
   mistakeSeverityNegligible: {
-    backgroundColor: "#95a5a6",
+    backgroundColor: "#94a3b8",
   },
   mistakeSeverityText: {
     fontSize: 11,
@@ -1169,16 +1178,16 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   mistakeSeverityTextMinor: {
-    color: "#000",
+    color: "#1e293b",
   },
   mistakeExplanation: {
     fontSize: 14,
-    color: "#ccc",
+    color: "#475569",
     lineHeight: 20,
   },
   mistakeArrow: {
     fontSize: 24,
-    color: "#ff4081",
+    color: "#6366f1",
   },
 
   // Feedback
@@ -1192,12 +1201,12 @@ const styles = StyleSheet.create({
   feedbackTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#4caf50",
+    color: "#10b981",
     marginBottom: 12,
   },
   feedbackText: {
     fontSize: 15,
-    color: "#fff",
+    color: "#1e293b",
     lineHeight: 24,
     textAlign: "center",
   },
@@ -1215,13 +1224,13 @@ const styles = StyleSheet.create({
     width: 100,
     fontSize: 12,
     fontWeight: "700",
-    color: "#ff80ab",
+    color: "#8b5cf6",
     textTransform: "uppercase",
   },
   probBarBg: {
     flex: 1,
     height: 32,
-    backgroundColor: "rgba(255, 23, 68, 0.1)",
+    backgroundColor: "rgba(99, 102, 241, 0.08)",
     borderRadius: 16,
     overflow: "hidden",
   },
@@ -1233,42 +1242,50 @@ const styles = StyleSheet.create({
     width: 60,
     fontSize: 14,
     fontWeight: "800",
-    color: "#fff",
+    color: "#1e293b",
     textAlign: "right",
   },
 
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
+    backgroundColor: "rgba(15, 23, 42, 0.8)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
   modal: {
-    backgroundColor: "#1a0a14",
+    backgroundColor: "#ffffff",
     borderRadius: 24,
     padding: 24,
+    paddingRight: 50,
     width: "100%",
     maxWidth: 500,
     borderWidth: 2,
-    borderColor: "rgba(255, 23, 68, 0.3)",
+    borderColor: "rgba(99, 102, 241, 0.2)",
+    shadowColor: "#6366f1",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 12,
   },
   modalClose: {
     position: "absolute",
-    top: 16,
-    right: 16,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 23, 68, 0.2)",
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(239, 68, 68, 0.12)", // 🔴 soft red bg
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
+    zIndex: 20, // ensure above header
   },
   modalCloseText: {
-    color: "#fff",
-    fontSize: 24,
+    color: "#ef4444", // 🔴 red cross
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 22, // prevents vertical clipping
   },
   modalHeader: {
     flexDirection: "row",
@@ -1285,7 +1302,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 24,
     fontWeight: "900",
-    color: "#fff",
+    color: "#1e293b",
   },
   modalBody: {
     gap: 20,
@@ -1294,14 +1311,14 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#ff4081",
+    color: "#6366f1",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 8,
   },
   modalSectionText: {
     fontSize: 15,
-    color: "#ccc",
+    color: "#475569",
     lineHeight: 22,
   },
 });
