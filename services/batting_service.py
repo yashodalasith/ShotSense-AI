@@ -263,23 +263,23 @@ class BattingService:
         mistake_viz = self.prepare_mistake_visualization(mistakes)
         
         # Generate images (optional, for backward compatibility)
-        skeleton_3d = self.skeleton_animator.generate_3d_skeleton(
-            actual_keypoints,
-            mistakes,
-            view_angle=(30, 45)
-        )
+        # skeleton_3d = self.skeleton_animator.generate_3d_skeleton(
+        #     actual_keypoints,
+        #     mistakes,
+        #     view_angle=(30, 45)
+        # )
         
-        comparison_view = self.skeleton_animator.generate_comparison_view(
-            actual_keypoints,
-            prototype_keypoints_2d,
-            mistakes
-        )
+        # comparison_view = self.skeleton_animator.generate_comparison_view(
+        #     actual_keypoints,
+        #     prototype_keypoints_2d,
+        #     mistakes
+        # )
 
-        # 3. Generate 360° animation
-        animation_360 = self.skeleton_animator.generate_multi_angle_animation(
-            actual_keypoints,
-            mistakes
-        )
+        # # 3. Generate 360° animation
+        # animation_360 = self.skeleton_animator.generate_multi_angle_animation(
+        #     actual_keypoints,
+        #     mistakes
+        # )
         
         return {
             # For 3D Avatar Frontend (PRIMARY)
@@ -292,11 +292,11 @@ class BattingService:
             'joint_connections': self._get_skeleton_connections(),
             
             # For backward compatibility (OPTIONAL)
-            'legacy_images': {
-                'skeleton_3d': skeleton_3d,
-                'comparison_view': comparison_view,
-                'animation_360': animation_360
-            },
+            # 'legacy_images': {
+            #     'skeleton_3d': skeleton_3d,
+            #     'comparison_view': comparison_view,
+            #     'animation_360': animation_360
+            # },
             
             # Metadata
             'prototype_used': intended_shot,
