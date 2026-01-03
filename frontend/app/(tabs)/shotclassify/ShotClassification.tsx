@@ -1,6 +1,6 @@
 /**
  * Shot Classification Screen - React Native
- * Mobile-responsive with 2D Vector Cricket Player
+ * Mobile-responsive with Spider Chart Visualization
  */
 
 import React, { useState, useEffect, useRef } from "react";
@@ -13,22 +13,10 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, {
-  Circle,
-  Rect,
-  Path,
-  Line,
-  Polygon,
-  G,
-  Defs,
-  LinearGradient as SvgGradient,
-  Stop,
-  TSpan,
-  Text as SvgText,
-} from "react-native-svg";
 import Animated, {
   FadeInUp,
   FadeInDown,
@@ -37,6 +25,7 @@ import Animated, {
   withTiming,
   withSpring,
 } from "react-native-reanimated";
+import Svg, { Polygon, Circle, Line, Text as SvgText } from "react-native-svg";
 
 import {
   getShotTypes,
@@ -48,12 +37,6 @@ import {
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const isSmallScreen = SCREEN_HEIGHT < 700;
 
-interface Keypoint3D {
-  joint: string;
-  index: number;
-  position: { x: number; y: number; z: number };
-}
-
 interface Mistake {
   joint_id: string;
   body_part: string;
@@ -64,371 +47,257 @@ interface Mistake {
   recommendation: string;
 }
 
-interface Avatar2DProps {
-  keypoints: Keypoint3D[];
-  mistakes: Mistake[];
-  highlightedJoint: string | null;
+interface MistakeAnalysis {
+  body_part: string;
+  severity_score: number;
 }
 
-// Convert 3D keypoints to 2D screen coordinates
-const projectTo2D = (keypoint: Keypoint3D, width: number, height: number) => {
-  // Normalize 3D coordinates to 2D with some perspective
-  const x = (keypoint.position.x + 50) * (width / 100);
-  const y = (keypoint.position.y + 50) * (height / 100);
-  return { x, y };
-};
+interface SpiderChartProps {
+  data: MistakeAnalysis[];
+}
 
-// Calculate angle between two points
-const calculateAngle = (
-  p1: { x: number; y: number },
-  p2: { x: number; y: number }
-) => {
-  return Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI);
-};
+const SpiderChart: React.FC<SpiderChartProps> = ({ data }) => {
+  const size = SCREEN_WIDTH - 80;
+  const center = size / 2;
+  const radius = size / 2 - 40;
+  const categories = [
+    "Torso",
+    "Front Elbow",
+    "Back Elbow",
+    "Back Knee",
+    "Shoulders",
+  ];
 
-// Get joint position from keypoints with fallback
-const getJointPosition = (
-  keypoints: Keypoint3D[],
-  jointName: string,
-  fallback: { x: number; y: number }
-) => {
-  const joint = keypoints.find((kp) => kp.joint === jointName);
-  if (joint) {
-    return {
-      x: joint.position.x,
-      y: joint.position.y,
-      z: joint.position.z,
+  // Map mistake analysis to categories
+  const getCategoryScore = (category: string) => {
+    const categoryMap: Record<string, string[]> = {
+      Torso: ["Body Position", "Torso"],
+      "Front Elbow": ["Front Elbow", "Front Wrist"],
+      "Back Elbow": ["Back Elbow", "Back Wrist"],
+      "Back Knee": ["Back Knee", "Front Knee"],
+      Shoulders: ["Shoulders", "Shoulder Rotation"],
     };
-  }
-  return { x: fallback.x, y: fallback.y, z: 0 };
-};
 
-// 2D Vector Cricket Player Component (Fixed)
-const VectorCricketPlayer: React.FC<Avatar2DProps> = ({
-  keypoints,
-  mistakes,
-  highlightedJoint,
-}) => {
-  const containerWidth = SCREEN_WIDTH - 64;
-  const containerHeight = isSmallScreen ? 280 : 340;
+    const relevantMistakes = data.filter((m) =>
+      categoryMap[category]?.some((cat) =>
+        m.body_part.toLowerCase().includes(cat.toLowerCase())
+      )
+    );
 
-  // Center of the SVG
-  const centerX = containerWidth / 2;
-  const centerY = containerHeight / 2;
+    if (relevantMistakes.length === 0) return 100;
 
-  // Simple cricket player with basic shapes
-  const playerHeight = 180;
-  const playerWidth = 80;
+    const avgSeverity =
+      relevantMistakes.reduce((sum, m) => sum + m.severity_score, 0) /
+      relevantMistakes.length;
+    return Math.max(0, 100 - avgSeverity * 100);
+  };
+
+  const getPoint = (index: number, value: number) => {
+    const angle = (Math.PI * 2 * index) / categories.length - Math.PI / 2;
+    const distance = (value / 100) * radius;
+    return {
+      x: center + Math.cos(angle) * distance,
+      y: center + Math.sin(angle) * distance,
+    };
+  };
+
+  const perfectPoints = categories.map((_, i) => getPoint(i, 100));
+  const userPoints = categories.map((cat, i) =>
+    getPoint(i, getCategoryScore(cat))
+  );
+
+  const perfectPolygon = perfectPoints.map((p) => `${p.x},${p.y}`).join(" ");
+  const userPolygon = userPoints.map((p) => `${p.x},${p.y}`).join(" ");
 
   return (
-    <View style={[styles.vectorPlayerContainer, { height: containerHeight }]}>
-      <Svg width={containerWidth} height={containerHeight}>
-        {/* Green ground */}
-        <Rect
-          x="0"
-          y={containerHeight - 60}
-          width={containerWidth}
-          height="60"
-          fill="#90EE90"
-        />
+    <View style={styles.spiderContainer}>
+      <Svg width={size} height={size}>
+        {/* Background circles */}
+        {[20, 40, 60, 80, 100].map((percent) => (
+          <Circle
+            key={percent}
+            cx={center}
+            cy={center}
+            r={(percent / 100) * radius}
+            stroke="#1a1a1a"
+            strokeWidth="1"
+            fill="none"
+          />
+        ))}
 
-        {/* Brown pitch */}
-        <Rect
-          x={centerX - 80}
-          y={containerHeight - 60}
-          width="160"
-          height="60"
-          fill="#D2B48C"
-        />
+        {/* Axes */}
+        {categories.map((_, i) => {
+          const point = getPoint(i, 100);
+          return (
+            <Line
+              key={i}
+              x1={center}
+              y1={center}
+              x2={point.x}
+              y2={point.y}
+              stroke="#1a1a1a"
+              strokeWidth="1"
+            />
+          );
+        })}
 
-        {/* Stumps */}
-        <Rect
-          x={centerX + 100}
-          y={containerHeight - 110}
-          width="10"
-          height="50"
-          fill="#8B4513"
-        />
-        <Rect
-          x={centerX + 115}
-          y={containerHeight - 110}
-          width="10"
-          height="50"
-          fill="#8B4513"
-        />
-        <Rect
-          x={centerX + 130}
-          y={containerHeight - 110}
-          width="10"
-          height="50"
-          fill="#8B4513"
-        />
-
-        {/* Bails */}
-        <Rect
-          x={centerX + 105}
-          y={containerHeight - 110}
-          width="30"
-          height="5"
-          fill="#FFFFFF"
-        />
-
-        {/* Player Body */}
-
-        {/* Left Leg (Front) */}
-        <Rect
-          x={centerX - 25}
-          y={centerY + 40}
-          width="15"
-          height="80"
-          fill="#00008B"
-          rx="5"
-        />
-
-        {/* Left Pad */}
-        <Rect
-          x={centerX - 30}
-          y={centerY + 50}
-          width="25"
-          height="60"
-          fill="#2F4F4F"
-          rx="3"
-        />
-
-        {/* Right Leg (Back) */}
-        <Rect
-          x={centerX + 10}
-          y={centerY + 20}
-          width="15"
-          height="100"
-          fill="#00008B"
-          rx="5"
-        />
-
-        {/* Right Pad */}
-        <Rect
-          x={centerX + 5}
-          y={centerY + 30}
-          width="25"
-          height="80"
-          fill="#2F4F4F"
-          rx="3"
-        />
-
-        {/* Body Torso */}
-        <Rect
-          x={centerX - 25}
-          y={centerY - 60}
-          width="50"
-          height="100"
-          fill="#00008B"
-          rx="10"
-        />
-
-        {/* Left Arm (Front) */}
-        <Rect
-          x={centerX - 40}
-          y={centerY - 50}
-          width="15"
-          height="50"
-          fill="#00008B"
-          rx="5"
-        />
-
-        {/* Left Glove */}
-        <Circle
-          cx={centerX - 32}
-          cy={centerY}
-          r="12"
-          fill="#FFFFFF"
-          stroke="#000"
+        {/* Perfect form (outer) */}
+        <Polygon
+          points={perfectPolygon}
+          fill="rgba(0, 255, 136, 0.1)"
+          stroke="#00ff88"
           strokeWidth="2"
         />
 
-        {/* Right Arm (Back) */}
-        <Rect
-          x={centerX + 25}
-          y={centerY - 70}
-          width="15"
-          height="70"
-          fill="#00008B"
-          rx="5"
-        />
-
-        {/* Right Glove */}
-        <Circle
-          cx={centerX + 32}
-          cy={centerY}
-          r="12"
-          fill="#FFFFFF"
-          stroke="#000"
+        {/* User's execution (inner) */}
+        <Polygon
+          points={userPolygon}
+          fill="rgba(255, 59, 48, 0.2)"
+          stroke="#ff3b30"
           strokeWidth="2"
         />
 
-        {/* Head */}
-        <Circle cx={centerX} cy={centerY - 90} r="20" fill="#FFCC99" />
-
-        {/* Face */}
-        <Circle cx={centerX - 6} cy={centerY - 95} r="2" fill="#000" />
-        <Circle cx={centerX + 6} cy={centerY - 95} r="2" fill="#000" />
-        <Path
-          d={`M ${centerX - 8} ${centerY - 80} Q ${centerX} ${centerY - 75}, ${
-            centerX + 8
-          } ${centerY - 80}`}
-          stroke="#000"
-          strokeWidth="2"
-          fill="none"
-        />
-
-        {/* Helmet */}
-        <Circle
-          cx={centerX}
-          cy={centerY - 90}
-          r="22"
-          fill="none"
-          stroke="#00008B"
-          strokeWidth="8"
-          strokeDasharray="20,10"
-        />
-
-        {/* Bat */}
-        <Rect
-          x={centerX + 32}
-          y={centerY - 150}
-          width="8"
-          height="120"
-          fill="#8B4513"
-          rx="3"
-        />
-
-        {/* Bat Blade */}
-        <Rect
-          x={centerX + 40}
-          y={centerY - 180}
-          width="4"
-          height="80"
-          fill="#D2691E"
-        />
-        <Rect
-          x={centerX + 38}
-          y={centerY - 180}
-          width="8"
-          height="20"
-          fill="#D2691E"
-        />
-
-        {/* Shoes */}
-        <Rect
-          x={centerX - 30}
-          y={centerY + 115}
-          width="20"
-          height="10"
-          fill="#FFFFFF"
-          rx="3"
-          stroke="#000"
-          strokeWidth="1"
-        />
-        <Rect
-          x={centerX + 10}
-          y={centerY + 115}
-          width="20"
-          height="10"
-          fill="#FFFFFF"
-          rx="3"
-          stroke="#000"
-          strokeWidth="1"
-        />
-
-        {/* Mistake Indicators */}
-        {mistakes.map((mistake, index) => {
-          // Map joint_id to positions
-          const jointPositions: { [key: string]: { x: number; y: number }[] } =
-            {
-              shoulder_rotation: [
-                { x: centerX - 25, y: centerY - 50 },
-                { x: centerX + 25, y: centerY - 50 },
-              ],
-              front_elbow: [{ x: centerX + 32, y: centerY - 20 }],
-              back_elbow: [{ x: centerX - 32, y: centerY - 20 }],
-              front_wrist: [{ x: centerX + 32, y: centerY + 20 }],
-              back_wrist: [{ x: centerX - 32, y: centerY + 20 }],
-              front_knee: [{ x: centerX + 18, y: centerY + 70 }],
-              back_knee: [{ x: centerX - 18, y: centerY + 90 }],
-              torso_bend: [{ x: centerX, y: centerY - 10 }],
-              body_position: [{ x: centerX, y: centerY - 10 }],
-              Torso: [{ x: centerX, y: centerY - 10 }],
-            };
-
-          const affectedJoints = jointPositions[mistake.joint_id] || [
-            { x: centerX, y: centerY },
-          ];
-
-          return affectedJoints.map((joint, jointIndex) => {
-            const isHighlighted = highlightedJoint === mistake.joint_id;
-            const severityColor = mistake.severity_color;
-
-            return (
-              <G key={`${index}-${jointIndex}`}>
-                {/* Glow effect when highlighted */}
-                {isHighlighted && (
-                  <Circle
-                    cx={joint.x}
-                    cy={joint.y}
-                    r="25"
-                    fill={severityColor}
-                    opacity="0.3"
-                  />
-                )}
-
-                {/* Joint indicator */}
-                <Circle
-                  cx={joint.x}
-                  cy={joint.y}
-                  r="12"
-                  fill={severityColor}
-                  stroke="#FFFFFF"
-                  strokeWidth="3"
-                />
-
-                {/* Severity text */}
-                <SvgText
-                  x={joint.x}
-                  y={joint.y + 4}
-                  fill="#FFFFFF"
-                  fontSize="10"
-                  fontWeight="bold"
-                  textAnchor="middle"
-                >
-                  {mistake.severity === "critical"
-                    ? "C"
-                    : mistake.severity === "major"
-                    ? "M"
-                    : mistake.severity === "minor"
-                    ? "m"
-                    : "n"}
-                </SvgText>
-
-                {/* Arrow pointer */}
-                <Path
-                  d={`M ${joint.x + 30} ${joint.y - 30} L ${joint.x + 5} ${
-                    joint.y - 5
-                  }`}
-                  stroke={severityColor}
-                  strokeWidth="3"
-                  fill="none"
-                />
-                <Circle
-                  cx={joint.x + 30}
-                  cy={joint.y - 30}
-                  r="5"
-                  fill={severityColor}
-                />
-              </G>
-            );
-          });
+        {/* Category labels */}
+        {categories.map((cat, i) => {
+          const labelPoint = getPoint(i, 115);
+          return (
+            <SvgText
+              key={cat}
+              x={labelPoint.x}
+              y={labelPoint.y}
+              fill="#00ff88"
+              fontSize="12"
+              fontWeight="bold"
+              textAnchor="middle"
+            >
+              {cat.toUpperCase()}
+            </SvgText>
+          );
         })}
       </Svg>
+
+      <View style={styles.spiderLegend}>
+        <View style={styles.spiderLegendItem}>
+          <View
+            style={[styles.spiderLegendDot, { backgroundColor: "#00ff88" }]}
+          />
+          <Text style={styles.spiderLegendText}>Perfect Form</Text>
+        </View>
+        <View style={styles.spiderLegendItem}>
+          <View
+            style={[styles.spiderLegendDot, { backgroundColor: "#ff3b30" }]}
+          />
+          <Text style={styles.spiderLegendText}>Your Execution</Text>
+        </View>
+      </View>
     </View>
+  );
+};
+
+interface MistakeModalProps {
+  visible: boolean;
+  mistake: Mistake | null;
+  onClose: () => void;
+}
+
+const MistakeModal: React.FC<MistakeModalProps> = ({
+  visible,
+  mistake,
+  onClose,
+}) => {
+  if (!mistake) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <TouchableOpacity
+          style={styles.modalBackground}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+
+        <Animated.View
+          entering={FadeInUp.duration(300)}
+          style={styles.modalContent}
+        >
+          <LinearGradient
+            colors={["#00ff88", "#00cc6f"]}
+            style={styles.modalHeader}
+          >
+            <View style={styles.modalHeaderContent}>
+              <Text style={styles.modalTitle}>
+                {mistake.body_part.toUpperCase()}
+              </Text>
+              <View style={styles.modalSeverityBadge}>
+                <Text style={styles.modalSeverityText}>
+                  {mistake.severity.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          <View style={styles.modalBody}>
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionIcon}>❌</Text>
+              <View style={styles.modalSectionContent}>
+                <Text style={styles.modalSectionLabel}>THE ISSUE</Text>
+                <Text style={styles.modalSectionText}>
+                  {mistake.explanation}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionIcon}>✅</Text>
+              <View style={styles.modalSectionContent}>
+                <Text style={styles.modalSectionLabel}>HOW TO FIX IT</Text>
+                <Text style={styles.modalSectionText}>
+                  {mistake.recommendation}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalSeverityBar}>
+              <Text style={styles.modalSeverityBarLabel}>ISSUE SEVERITY</Text>
+              <View style={styles.severityBarContainer}>
+                <View
+                  style={[
+                    styles.severityBarFill,
+                    {
+                      width: `${mistake.glow_intensity * 100}%`,
+                      backgroundColor: "#00ff88",
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.severityScale}>
+                <Text style={styles.severityScaleText}>Low</Text>
+                <Text style={styles.severityScaleText}>Medium</Text>
+                <Text style={styles.severityScaleText}>High</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={onClose}
+              activeOpacity={0.8}
+              style={styles.modalCloseButton}
+            >
+              <LinearGradient
+                colors={["#00ff88", "#00cc6f"]}
+                style={styles.modalCloseGradient}
+              >
+                <Text style={styles.modalCloseText}>Got it!</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 };
 
@@ -439,7 +308,8 @@ export default function ShotClassificationScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [score, setScore] = useState(0);
-  const [highlightedJoint, setHighlightedJoint] = useState<string | null>(null);
+  const [selectedMistake, setSelectedMistake] = useState<Mistake | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const scoreAnim = useSharedValue(0);
   const buttonScale = useSharedValue(1);
@@ -512,16 +382,15 @@ export default function ShotClassificationScreen() {
     }
   };
 
+  const handleMistakePress = (mistake: Mistake) => {
+    setSelectedMistake(mistake);
+    setModalVisible(true);
+  };
+
   const buttonAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: buttonScale.value }],
   }));
 
-  function capitalize(text: string) {
-    if (!text) return "";
-    return text.charAt(0).toUpperCase() + text.slice(1);
-  }
-
-  // Calculate radar chart data
   const getRadarData = () => {
     if (!result) return [];
     const probs = result.ensemble_probabilities;
@@ -536,9 +405,9 @@ export default function ShotClassificationScreen() {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Hero Section with Cricket Icons */}
+      {/* Hero Section */}
       <LinearGradient
-        colors={["rgba(99, 102, 241, 0.12)", "rgba(139, 92, 246, 0.08)"]}
+        colors={["rgba(0, 255, 136, 0.15)", "rgba(0, 204, 111, 0.1)"]}
         style={[styles.hero, { paddingTop: isSmallScreen ? 40 : 60 }]}
       >
         <Animated.View
@@ -563,7 +432,7 @@ export default function ShotClassificationScreen() {
         <View style={styles.heroStats}>
           {[
             { value: "99.2%", label: "Accuracy", icon: "🎯" },
-            { value: "2D", label: "Visual", icon: "👁️" },
+            { value: "Visual", label: "Feedback", icon: "👁️" },
             { value: "AI", label: "Powered", icon: "🤖" },
           ].map((stat, idx) => (
             <Animated.View
@@ -621,8 +490,8 @@ export default function ShotClassificationScreen() {
                 <LinearGradient
                   colors={
                     isActive
-                      ? ["#6366f1", "#8b5cf6"]
-                      : ["rgba(99, 102, 241, 0.06)", "rgba(139, 92, 246, 0.04)"]
+                      ? ["#00ff88", "#00cc6f"]
+                      : ["rgba(0, 255, 136, 0.1)", "rgba(0, 204, 111, 0.05)"]
                   }
                   style={[styles.shotChip, isActive && styles.shotChipActive]}
                 >
@@ -658,8 +527,8 @@ export default function ShotClassificationScreen() {
           <LinearGradient
             colors={
               videoUri
-                ? ["#10b981", "#34d399"]
-                : ["rgba(99, 102, 241, 0.06)", "rgba(139, 92, 246, 0.06)"]
+                ? ["#00ff88", "#00cc6f"]
+                : ["rgba(0, 255, 136, 0.1)", "rgba(0, 204, 111, 0.1)"]
             }
             style={styles.uploadArea}
           >
@@ -698,7 +567,7 @@ export default function ShotClassificationScreen() {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={["#6366f1", "#8b5cf6"]}
+            colors={["#00ff88", "#00cc6f"]}
             style={[
               styles.analyzeButton,
               (!videoUri || !selectedShot || analyzing) &&
@@ -707,7 +576,7 @@ export default function ShotClassificationScreen() {
           >
             {analyzing ? (
               <>
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color="#000" size="small" />
                 <Text
                   style={[
                     styles.analyzeButtonText,
@@ -745,8 +614,8 @@ export default function ShotClassificationScreen() {
             <LinearGradient
               colors={
                 result.is_correct
-                  ? ["#10b981", "#34d399"]
-                  : ["#f59e0b", "#fbbf24"]
+                  ? ["#00ff88", "#00cc6f"]
+                  : ["#ff9500", "#ff6b00"]
               }
               style={styles.statusGradient}
             >
@@ -828,9 +697,7 @@ export default function ShotClassificationScreen() {
                     style={[
                       styles.scoreRowValue,
                       isSmallScreen && { fontSize: 12 },
-                      {
-                        color: result.is_correct ? "#10b981" : "#f59e0b",
-                      },
+                      { color: result.is_correct ? "#00ff88" : "#ff9500" },
                     ]}
                   >
                     {result.predicted_shot.toUpperCase()}
@@ -848,7 +715,7 @@ export default function ShotClassificationScreen() {
                       isSmallScreen && { fontSize: 11 },
                     ]}
                   >
-                    ⚡ Contact Frame:
+                    📊 Prototype:
                   </Text>
                   <Text
                     style={[
@@ -856,26 +723,26 @@ export default function ShotClassificationScreen() {
                       isSmallScreen && { fontSize: 12 },
                     ]}
                   >
-                    #{result.analysis_metadata.contact_frame}
+                    {result.analysis_metadata.prototype_samples} samples
                   </Text>
                 </View>
               </View>
             </View>
           </Animated.View>
 
-          {/* 2D Vector Cricket Player */}
+          {/* Spider Chart - Shot DNA */}
           <Animated.View entering={FadeInUp.delay(200)} style={styles.card}>
             <View style={styles.cardHeader}>
               <Text
                 style={[styles.cardIcon, isSmallScreen && { fontSize: 24 }]}
               >
-                👤
+                🕸️
               </Text>
               <View style={styles.cardHeaderText}>
                 <Text
                   style={[styles.cardTitle, isSmallScreen && { fontSize: 16 }]}
                 >
-                  Batting Pose Analysis
+                  Shot DNA Analysis
                 </Text>
                 <Text
                   style={[
@@ -883,303 +750,82 @@ export default function ShotClassificationScreen() {
                     isSmallScreen && { fontSize: 12 },
                   ]}
                 >
-                  Visual representation of your shot mechanics
+                  Your execution vs perfect form
                 </Text>
               </View>
             </View>
 
-            <VectorCricketPlayer
-              keypoints={result.visual_feedback.keypoints_3d.actual}
-              mistakes={result.visual_feedback.mistakes}
-              highlightedJoint={highlightedJoint}
-            />
-
-            <Text style={styles.playerInstructions}>
-              💡 Tap on mistakes below to highlight the affected joints
-            </Text>
+            <SpiderChart data={result.mistake_analysis || []} />
           </Animated.View>
 
-          {/* Hotspot Mistake Cards */}
-          {result.visual_feedback.mistakes.length > 0 && (
-            <Animated.View entering={FadeInUp.delay(300)} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text
-                  style={[styles.cardIcon, isSmallScreen && { fontSize: 24 }]}
-                >
-                  ⚠️
-                </Text>
-                <View style={styles.cardHeaderText}>
+          {/* Mistake Summary Cards */}
+          {result?.visual_feedback.mistakes &&
+            result.visual_feedback.mistakes.length > 0 && (
+              <Animated.View entering={FadeInUp.delay(300)} style={styles.card}>
+                <View style={styles.cardHeader}>
                   <Text
-                    style={[
-                      styles.cardTitle,
-                      isSmallScreen && { fontSize: 16 },
-                    ]}
+                    style={[styles.cardIcon, isSmallScreen && { fontSize: 24 }]}
                   >
-                    Technical Issues Found
+                    📋
                   </Text>
-                  <Text
-                    style={[
-                      styles.cardSubtitle,
-                      isSmallScreen && { fontSize: 12 },
-                    ]}
-                  >
-                    {result.visual_feedback.mistakes.length} area
-                    {result.visual_feedback.mistakes.length > 1 ? "s" : ""} need
-                    improvement
-                  </Text>
-                </View>
-              </View>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.mistakesScroll}
-              >
-                {result.visual_feedback.mistakes.map((mistake, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    onPress={() =>
-                      setHighlightedJoint(
-                        highlightedJoint === mistake.joint_id
-                          ? null
-                          : mistake.joint_id
-                      )
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <LinearGradient
-                      colors={
-                        highlightedJoint === mistake.joint_id
-                          ? [mistake.severity_color, mistake.severity_color]
-                          : ["#ffffff", "#f8fafc"]
-                      }
+                  <View style={styles.cardHeaderText}>
+                    <Text
                       style={[
-                        styles.mistakeCard,
-                        {
-                          width: isSmallScreen
-                            ? SCREEN_WIDTH * 0.85
-                            : SCREEN_WIDTH * 0.75,
-                        },
-                        {
-                          borderColor: mistake.severity_color,
-                          borderWidth:
-                            highlightedJoint === mistake.joint_id ? 3 : 2,
-                        },
+                        styles.cardTitle,
+                        isSmallScreen && { fontSize: 16 },
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.mistakeCardHeader,
-                          {
-                            backgroundColor:
-                              highlightedJoint === mistake.joint_id
-                                ? "rgba(255,255,255,0.3)"
-                                : mistake.severity_color,
-                          },
-                        ]}
-                      >
-                        <View style={styles.mistakeTitleContainer}>
-                          <Text
-                            style={[
-                              styles.mistakeCardTitle,
-                              isSmallScreen && { fontSize: 14 },
-                              {
-                                color:
-                                  highlightedJoint === mistake.joint_id
-                                    ? "#ffffff"
-                                    : mistake.severity === "minor"
-                                    ? "#1e293b"
-                                    : "#ffffff",
-                              },
-                            ]}
-                          >
-                            {mistake.body_part.toUpperCase()}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.mistakeCardSubtitle,
-                              {
-                                color:
-                                  highlightedJoint === mistake.joint_id
-                                    ? "rgba(255,255,255,0.8)"
-                                    : mistake.severity === "minor"
-                                    ? "#475569"
-                                    : "rgba(255,255,255,0.9)",
-                              },
-                            ]}
-                          >
-                            {mistake.joint_id.replace(/_/g, " ")}
-                          </Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.mistakeSeverityBadge,
-                            {
-                              backgroundColor:
-                                highlightedJoint === mistake.joint_id
-                                  ? "rgba(255,255,255,0.4)"
-                                  : "rgba(0,0,0,0.1)",
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.mistakeSeverityBadgeText,
-                              isSmallScreen && { fontSize: 9 },
-                              {
-                                color:
-                                  highlightedJoint === mistake.joint_id
-                                    ? "#ffffff"
-                                    : mistake.severity === "minor"
-                                    ? "#1e293b"
-                                    : "#ffffff",
-                              },
-                            ]}
-                          >
-                            {mistake.severity.toUpperCase()}
-                          </Text>
-                        </View>
-                      </View>
+                      Issues Summary
+                    </Text>
+                    <Text
+                      style={[
+                        styles.cardSubtitle,
+                        isSmallScreen && { fontSize: 12 },
+                      ]}
+                    >
+                      {result?.visual_feedback.mistakes?.length} area
+                      {(result?.visual_feedback.mistakes?.length ?? 0) > 1
+                        ? "s"
+                        : ""}{" "}
+                      need improvement
+                    </Text>
+                  </View>
+                </View>
 
-                      <View style={styles.mistakeCardBody}>
-                        <View style={styles.mistakeSection}>
-                          <Text
-                            style={[
-                              styles.mistakeCardLabel,
-                              isSmallScreen && { fontSize: 10 },
-                              {
-                                color:
-                                  highlightedJoint === mistake.joint_id
-                                    ? "#ffffff"
-                                    : "#64748b",
-                              },
-                            ]}
-                          >
-                            ❌ ISSUE:
-                          </Text>
-                          <Text
-                            style={[
-                              styles.mistakeCardText,
-                              isSmallScreen && { fontSize: 12, lineHeight: 18 },
-                              {
-                                color:
-                                  highlightedJoint === mistake.joint_id
-                                    ? "#ffffff"
-                                    : "#1e293b",
-                              },
-                            ]}
-                          >
-                            {mistake.explanation}
-                          </Text>
-                        </View>
-
-                        <View style={styles.mistakeSection}>
-                          <Text
-                            style={[
-                              styles.mistakeCardLabel,
-                              isSmallScreen && { fontSize: 10 },
-                              {
-                                color:
-                                  highlightedJoint === mistake.joint_id
-                                    ? "#ffffff"
-                                    : "#64748b",
-                              },
-                            ]}
-                          >
-                            ✅ FIX:
-                          </Text>
-                          <Text
-                            style={[
-                              styles.mistakeCardText,
-                              isSmallScreen && { fontSize: 12, lineHeight: 18 },
-                              {
-                                color:
-                                  highlightedJoint === mistake.joint_id
-                                    ? "#ffffff"
-                                    : "#1e293b",
-                              },
-                            ]}
-                          >
-                            {mistake.recommendation}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.glowIndicator}>
-                        <Text
-                          style={[
-                            styles.glowLabel,
-                            isSmallScreen && { fontSize: 10 },
-                            {
-                              color:
-                                highlightedJoint === mistake.joint_id
-                                  ? "#ffffff"
-                                  : "#64748b",
-                            },
-                          ]}
-                        >
-                          ISSUE SEVERITY:
-                        </Text>
-                        <View
-                          style={[
-                            styles.glowBar,
-                            {
-                              backgroundColor:
-                                highlightedJoint === mistake.joint_id
-                                  ? "rgba(255,255,255,0.3)"
-                                  : "#e2e8f0",
-                            },
-                          ]}
-                        >
-                          <View
-                            style={[
-                              styles.glowBarFill,
-                              {
-                                width: `${mistake.glow_intensity * 100}%`,
-                                backgroundColor: mistake.severity_color,
-                              },
-                            ]}
-                          />
-                        </View>
-                        <View style={styles.glowScale}>
-                          <Text
-                            style={[
-                              styles.glowScaleText,
-                              highlightedJoint === mistake.joint_id && {
-                                color: "#ffffff",
-                              },
-                            ]}
-                          >
-                            Low
-                          </Text>
-                          <Text
-                            style={[
-                              styles.glowScaleText,
-                              highlightedJoint === mistake.joint_id && {
-                                color: "#ffffff",
-                              },
-                            ]}
-                          >
-                            Medium
-                          </Text>
-                          <Text
-                            style={[
-                              styles.glowScaleText,
-                              highlightedJoint === mistake.joint_id && {
-                                color: "#ffffff",
-                              },
-                            ]}
-                          >
-                            High
-                          </Text>
-                        </View>
-                      </View>
-                    </LinearGradient>
+                {result?.visual_feedback.mistakes.map((mistake, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => handleMistakePress(mistake)}
+                    activeOpacity={0.7}
+                    style={styles.summaryCard}
+                  >
+                    <View
+                      style={[
+                        styles.summaryMarker,
+                        { backgroundColor: "#00ff88" },
+                      ]}
+                    >
+                      <Text style={styles.summaryMarkerText}>
+                        {mistake.severity === "critical"
+                          ? "!"
+                          : mistake.severity === "major"
+                          ? "⚠"
+                          : "•"}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryContent}>
+                      <Text style={styles.summaryTitle}>
+                        {mistake.body_part}
+                      </Text>
+                      <Text style={styles.summaryText} numberOfLines={2}>
+                        {mistake.explanation}
+                      </Text>
+                    </View>
+                    <Text style={styles.summaryArrow}>›</Text>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
-            </Animated.View>
-          )}
+              </Animated.View>
+            )}
 
           {/* AI Feedback */}
           <Animated.View entering={FadeInUp.delay(400)} style={styles.card}>
@@ -1206,7 +852,7 @@ export default function ShotClassificationScreen() {
               </View>
             </View>
             <LinearGradient
-              colors={["rgba(99, 102, 241, 0.08)", "rgba(139, 92, 246, 0.06)"]}
+              colors={["rgba(0, 255, 136, 0.1)", "rgba(0, 204, 111, 0.08)"]}
               style={styles.feedbackBox}
             >
               <Text
@@ -1217,7 +863,7 @@ export default function ShotClassificationScreen() {
             </LinearGradient>
           </Animated.View>
 
-          {/* Radar Chart - Shot Confusion */}
+          {/* Radar Chart */}
           <Animated.View entering={FadeInUp.delay(500)} style={styles.card}>
             <View style={styles.cardHeader}>
               <Text
@@ -1288,10 +934,10 @@ export default function ShotClassificationScreen() {
                     <LinearGradient
                       colors={
                         item.shot === result.predicted_shot
-                          ? ["#6366f1", "#8b5cf6"]
+                          ? ["#00ff88", "#00cc6f"]
                           : item.shot === result.intended_shot
-                          ? ["#10b981", "#34d399"]
-                          : ["#94a3b8", "#cbd5e1"]
+                          ? ["#00ffff", "#00cccc"]
+                          : ["#333333", "#1a1a1a"]
                       }
                       style={[styles.radarBarFill, { width: `${item.value}%` }]}
                       start={{ x: 0, y: 0 }}
@@ -1312,19 +958,19 @@ export default function ShotClassificationScreen() {
             </View>
           </Animated.View>
 
-          {/* Timeline */}
+          {/* Detection Quality Info */}
           <Animated.View entering={FadeInUp.delay(600)} style={styles.card}>
             <View style={styles.cardHeader}>
               <Text
                 style={[styles.cardIcon, isSmallScreen && { fontSize: 24 }]}
               >
-                ⏱️
+                🎥
               </Text>
               <View style={styles.cardHeaderText}>
                 <Text
                   style={[styles.cardTitle, isSmallScreen && { fontSize: 16 }]}
                 >
-                  Shot Contact Timeline
+                  Video Analysis Quality
                 </Text>
                 <Text
                   style={[
@@ -1332,71 +978,73 @@ export default function ShotClassificationScreen() {
                     isSmallScreen && { fontSize: 12 },
                   ]}
                 >
-                  Ball impact detected at frame #
-                  {result.analysis_metadata.contact_frame}
+                  Detection metrics from your video
                 </Text>
               </View>
             </View>
 
-            <View style={styles.timeline}>
-              <View style={styles.timelineBar}>
-                <View
-                  style={[
-                    styles.timelineMarker,
-                    {
-                      left: `${
-                        (result.analysis_metadata.contact_frame / 30) * 100
-                      }%`,
-                    },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={["#f59e0b", "#fbbf24"]}
-                    style={styles.timelineMarkerCircle}
-                  >
-                    <Text style={styles.timelineMarkerText}>💥</Text>
-                  </LinearGradient>
-                  <Text
-                    style={[
-                      styles.timelineMarkerLabel,
-                      isSmallScreen && { fontSize: 10 },
-                    ]}
-                  >
-                    BALL CONTACT
+            <View style={styles.detectionInfo}>
+              <View style={styles.detectionRow}>
+                <View style={styles.detectionItem}>
+                  <Text style={styles.detectionLabel}>Ball Detection</Text>
+                  <View style={styles.detectionBar}>
+                    <View
+                      style={[
+                        styles.detectionBarFill,
+                        {
+                          width: `${
+                            result.analysis_metadata?.contact_detection
+                              ?.ball_detection_rate ?? 0
+                          }%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.detectionValue}>
+                    {(
+                      result.analysis_metadata?.contact_detection
+                        ?.ball_detection_rate ?? 0
+                    ).toFixed(1)}
+                    %
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.timelineLabels}>
-                <Text
-                  style={[
-                    styles.timelineLabel,
-                    isSmallScreen && { fontSize: 11 },
-                  ]}
-                >
-                  START
-                </Text>
-                <Text
-                  style={[
-                    styles.timelineLabel,
-                    isSmallScreen && { fontSize: 11 },
-                  ]}
-                >
-                  FRAME #{result.analysis_metadata.contact_frame}
-                </Text>
-                <Text
-                  style={[
-                    styles.timelineLabel,
-                    isSmallScreen && { fontSize: 11 },
-                  ]}
-                >
-                  END
-                </Text>
+              <View style={styles.detectionRow}>
+                <View style={styles.detectionItem}>
+                  <Text style={styles.detectionLabel}>Detection Method</Text>
+                  <Text style={styles.detectionMethodText}>
+                    {result.analysis_metadata?.contact_detection?.detection_method
+                      ?.replace(/_/g, " ")
+                      .toUpperCase() ?? "N/A"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.detectionRow}>
+                <View style={styles.detectionItem}>
+                  <Text style={styles.detectionLabel}>Analysis Confidence</Text>
+                  <Text style={styles.detectionMethodText}>
+                    Tier 2 Score:{" "}
+                    {(
+                      (result.analysis_metadata?.contact_detection
+                        ?.tier2_score ?? 0) * 100
+                    ).toFixed(1)}
+                    %
+                  </Text>
+                </View>
               </View>
             </View>
           </Animated.View>
         </>
       )}
+
+      {/* Mistake Detail Modal */}
+      <MistakeModal
+        visible={modalVisible}
+        mistake={selectedMistake}
+        onClose={() => setModalVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -1404,13 +1052,14 @@ export default function ShotClassificationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#0a0a0a",
   },
 
   // Hero
   hero: {
     paddingBottom: 40,
     paddingHorizontal: 20,
+    backgroundColor: "#0a0a0a",
   },
   heroContent: {
     alignItems: "center",
@@ -1426,14 +1075,14 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 32,
     fontWeight: "900",
-    color: "#6366f1",
+    color: "#00ff88",
     letterSpacing: 1.5,
     textAlign: "center",
     marginBottom: 8,
   },
   heroSubtitle: {
     fontSize: 14,
-    color: "#8b5cf6",
+    color: "#00cc6f",
     textAlign: "center",
   },
   heroStats: {
@@ -1451,11 +1100,11 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 22,
     fontWeight: "900",
-    color: "#6366f1",
+    color: "#00ff88",
   },
   statLabel: {
     fontSize: 10,
-    color: "#94a3b8",
+    color: "#666666",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginTop: 4,
@@ -1463,16 +1112,13 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#1a1a1a",
     borderRadius: 20,
     padding: 20,
     marginHorizontal: 16,
     marginBottom: 16,
-    shadowColor: "#6366f1",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
   },
   cardHeader: {
     flexDirection: "row",
@@ -1489,51 +1135,12 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#1e293b",
+    color: "#00ff88",
     marginBottom: 4,
   },
   cardSubtitle: {
     fontSize: 13,
-    color: "#8b5cf6",
-  },
-
-  // Vector Player Container
-  vectorPlayerContainer: {
-    width: "100%",
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "rgba(99, 102, 241, 0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  playerInstructions: {
-    fontSize: 12,
-    color: "#64748b",
-    textAlign: "center",
-    marginTop: 12,
-    fontStyle: "italic",
-  },
-  jointLabels: {
-    position: "absolute",
-    pointerEvents: "none",
-  },
-  jointLabel: {
-    position: "absolute",
-    backgroundColor: "rgba(99, 102, 241, 0.8)",
-    padding: 4,
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 40,
-    minHeight: 40,
-  },
-  jointLabelText: {
-    color: "#ffffff",
-    fontSize: 8,
-    textAlign: "center",
-    fontWeight: "bold",
+    color: "#00cc6f",
   },
 
   // Shot Selection
@@ -1547,33 +1154,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: "rgba(99, 102, 241, 0.2)",
+    borderColor: "rgba(0, 255, 136, 0.3)",
     minWidth: (SCREEN_WIDTH - 72) / 3,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
   shotChipActive: {
-    borderColor: "#6366f1",
-    shadowColor: "#6366f1",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    borderColor: "#00ff88",
   },
   shotChipText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#8b5cf6",
+    color: "#00cc6f",
   },
   shotChipTextActive: {
-    color: "#fff",
+    color: "#000",
   },
   checkMark: {
     position: "absolute",
     top: 4,
     right: 4,
-    color: "#fff",
+    color: "#000",
     fontSize: 16,
   },
 
@@ -1594,12 +1196,12 @@ const styles = StyleSheet.create({
   uploadTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#1e293b",
+    color: "#d0ff00e0",
     marginBottom: 4,
   },
   uploadSubtitle: {
     fontSize: 13,
-    color: "#0a0a0aff",
+    color: "#1a1a1aff",
   },
 
   // Analyze Button
@@ -1614,11 +1216,6 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     borderRadius: 16,
     gap: 8,
-    shadowColor: "#6366f1",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   analyzeButtonDisabled: {
     opacity: 0.5,
@@ -1629,7 +1226,7 @@ const styles = StyleSheet.create({
   analyzeButtonText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#fff",
+    color: "#000",
     letterSpacing: 1,
   },
 
@@ -1653,7 +1250,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#fff",
+    color: "#000",
   },
 
   // Score Card
@@ -1667,19 +1264,19 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 10,
-    borderColor: "#e0e7ff",
-    backgroundColor: "rgba(99, 102, 241, 0.05)",
+    borderColor: "#2a2a2a",
+    backgroundColor: "rgba(0, 255, 136, 0.05)",
     justifyContent: "center",
     alignItems: "center",
   },
   scoreValue: {
     fontSize: 36,
     fontWeight: "900",
-    color: "#6366f1",
+    color: "#00ff88",
   },
   scoreLabel: {
     fontSize: 10,
-    color: "#8b5cf6",
+    color: "#00cc6f",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -1693,106 +1290,203 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: "rgba(99, 102, 241, 0.05)",
+    backgroundColor: "rgba(0, 255, 136, 0.05)",
     borderRadius: 8,
   },
   scoreRowLabel: {
     fontSize: 13,
-    color: "#64748b",
+    color: "#666666",
     fontWeight: "600",
   },
   scoreRowValue: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#1e293b",
+    color: "#00ff88",
     textTransform: "uppercase",
   },
 
-  // Mistake Cards
-  mistakesScroll: {
-    paddingRight: 16,
+  // Spider Chart
+  spiderContainer: {
+    alignItems: "center",
+    paddingVertical: 20,
   },
-  mistakeCard: {
-    borderRadius: 16,
-    marginRight: 12,
-    overflow: "hidden",
+  spiderLegend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 24,
+    marginTop: 16,
   },
-  mistakeCardHeader: {
+  spiderLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  spiderLegendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  spiderLegendText: {
+    fontSize: 12,
+    color: "#cccccc",
+    fontWeight: "600",
+  },
+
+  // Summary Cards
+  summaryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "rgba(0, 255, 136, 0.05)",
+    borderRadius: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  summaryMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  summaryMarkerText: {
+    color: "#000",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  summaryContent: {
+    flex: 1,
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#00ff88",
+    marginBottom: 2,
+  },
+  summaryText: {
+    fontSize: 12,
+    color: "#cccccc",
+    lineHeight: 16,
+  },
+  summaryArrow: {
+    fontSize: 24,
+    color: "#666666",
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  modalBackground: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+  },
+  modalContent: {
+    backgroundColor: "#1a1a1a",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    padding: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  modalHeaderContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
   },
-  mistakeTitleContainer: {
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#000",
     flex: 1,
   },
-  mistakeCardTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 2,
-  },
-  mistakeCardSubtitle: {
-    fontSize: 10,
-    fontWeight: "600",
-    textTransform: "uppercase",
-  },
-  mistakeSeverityBadge: {
+  modalSeverityBadge: {
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 12,
-    marginLeft: 8,
   },
-  mistakeSeverityBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  mistakeCardBody: {
-    padding: 16,
-    paddingTop: 8,
-  },
-  mistakeSection: {
-    marginBottom: 12,
-  },
-  mistakeCardLabel: {
+  modalSeverityText: {
     fontSize: 11,
     fontWeight: "700",
+    color: "#000",
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalSection: {
+    flexDirection: "row",
+    marginBottom: 20,
+    gap: 12,
+  },
+  modalSectionIcon: {
+    fontSize: 24,
+  },
+  modalSectionContent: {
+    flex: 1,
+  },
+  modalSectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#00cc6f",
+    marginBottom: 6,
     textTransform: "uppercase",
     letterSpacing: 1,
-    marginBottom: 6,
   },
-  mistakeCardText: {
+  modalSectionText: {
     fontSize: 14,
+    color: "#cccccc",
     lineHeight: 20,
   },
-  glowIndicator: {
-    padding: 16,
-    paddingTop: 0,
+  modalSeverityBar: {
+    marginBottom: 20,
   },
-  glowLabel: {
+  modalSeverityBarLabel: {
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "700",
+    color: "#666666",
     marginBottom: 8,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
-  glowBar: {
+  severityBarContainer: {
     height: 8,
+    backgroundColor: "#2a2a2a",
     borderRadius: 4,
     overflow: "hidden",
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  glowBarFill: {
+  severityBarFill: {
     height: "100%",
-    borderRadius: 4,
   },
-  glowScale: {
+  severityScale: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  glowScaleText: {
+  severityScaleText: {
     fontSize: 10,
-    color: "#64748b",
+    color: "#666666",
+  },
+  modalCloseButton: {
+    marginTop: 8,
+  },
+  modalCloseGradient: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#000",
   },
 
   // Feedback
@@ -1802,7 +1496,7 @@ const styles = StyleSheet.create({
   },
   feedbackText: {
     fontSize: 15,
-    color: "#1e293b",
+    color: "#cccccc",
     lineHeight: 24,
   },
 
@@ -1821,7 +1515,7 @@ const styles = StyleSheet.create({
   radarShot: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1e293b",
+    color: "#00ff88",
     textTransform: "uppercase",
     marginBottom: 2,
   },
@@ -1831,12 +1525,12 @@ const styles = StyleSheet.create({
   },
   radarBadge: {
     fontSize: 10,
-    color: "#8b5cf6",
+    color: "#00cc6f",
   },
   radarBarBg: {
     flex: 1,
     height: 28,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#2a2a2a",
     borderRadius: 14,
     overflow: "hidden",
   },
@@ -1849,54 +1543,46 @@ const styles = StyleSheet.create({
     width: 60,
     fontSize: 13,
     fontWeight: "800",
-    color: "#1e293b",
+    color: "#00ff88",
     textAlign: "right",
   },
 
-  // Timeline
-  timeline: {
-    paddingVertical: 20,
+  // Detection Info
+  detectionInfo: {
+    gap: 16,
   },
-  timelineBar: {
-    height: 8,
-    backgroundColor: "#e2e8f0",
-    borderRadius: 4,
-    position: "relative",
+  detectionRow: {
+    gap: 8,
   },
-  timelineMarker: {
-    position: "absolute",
-    top: -12,
-    alignItems: "center",
+  detectionItem: {
+    gap: 8,
   },
-  timelineMarkerCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#f59e0b",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  timelineMarkerText: {
-    fontSize: 16,
-  },
-  timelineMarkerLabel: {
-    fontSize: 11,
+  detectionLabel: {
+    fontSize: 13,
     fontWeight: "700",
-    color: "#f59e0b",
-    marginTop: 8,
+    color: "#00cc6f",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
-  timelineLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 32,
+  detectionBar: {
+    height: 12,
+    backgroundColor: "#2a2a2a",
+    borderRadius: 6,
+    overflow: "hidden",
   },
-  timelineLabel: {
-    fontSize: 12,
-    color: "#64748b",
+  detectionBarFill: {
+    height: "100%",
+    backgroundColor: "#00ff88",
+    borderRadius: 6,
+  },
+  detectionValue: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#00ff88",
+  },
+  detectionMethodText: {
+    fontSize: 14,
     fontWeight: "600",
+    color: "#cccccc",
   },
 });
