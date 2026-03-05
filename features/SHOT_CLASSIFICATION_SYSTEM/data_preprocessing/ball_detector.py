@@ -44,7 +44,7 @@ class BallBatDetector:
     GENERIC_BAT_THRESH = 0.30   # COCO bat classes
 
     # ── Tier trigger thresholds ────────────────────────────────────────────────
-    TIER1_SCORE_THRESH = 0.55   # require both custom models confident
+    TIER1_SCORE_THRESH = 0.25   # require both custom models confident
     TIER2_SCORE_THRESH = 0.45   # generic bat + ball
     TIER3_SCORE_THRESH = 0.15   # virtual bat + ball
     BALL_RATE_TIER1    = 30     # % of frames ball must be detected to use Tier 1/2
@@ -166,7 +166,7 @@ class BallBatDetector:
             conf=self.BAT_CONF_THRESH,
             iou=0.45,
             verbose=False,
-            classes=[0],    # class 0 = cricket_bat in our custom model
+            classes=[1],   
         )
 
         if not results or not results[0].boxes:
