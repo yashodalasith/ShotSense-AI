@@ -80,3 +80,4 @@ wandb/
 
 # Ignore everything inside trained_models
 trained_models/
+debug_contact_frames/
