@@ -39,8 +39,8 @@ class BallBatDetector:
     """
 
     # ── Confidence thresholds ──────────────────────────────────────────────────
-    BALL_CONF_THRESH   = 0.20   # custom ball model
-    BAT_CONF_THRESH    = 0.35   # custom bat model  (higher = less false positives)
+    BALL_CONF_THRESH   = 0.45   # custom ball model
+    BAT_CONF_THRESH    = 0.2   # custom bat model  (higher = less false positives)
     GENERIC_BAT_THRESH = 0.30   # COCO bat classes
 
     # ── Tier trigger thresholds ────────────────────────────────────────────────
@@ -414,25 +414,25 @@ class BallBatDetector:
         }
 
         # ── Save contact frame for debugging ─────────────────────────────
-        debug_folder = "debug_contact_frames"
-        os.makedirs(debug_folder, exist_ok=True)
-        save_path = os.path.join(debug_folder, f"contact_frame_{contact_idx}.jpg")
-        frame_debug = frames[contact_idx].copy()
+        # debug_folder = "debug_contact_frames"
+        # os.makedirs(debug_folder, exist_ok=True)
+        # save_path = os.path.join(debug_folder, f"contact_frame_{contact_idx}.jpg")
+        # frame_debug = frames[contact_idx].copy()
 
-        if d["ball_bbox"] is not None:
-            x1,y1,x2,y2 = map(int, d["ball_bbox"])
-            cv2.rectangle(frame_debug,(x1,y1),(x2,y2),(0,255,0),2)
+        # if d["ball_bbox"] is not None:
+        #     x1,y1,x2,y2 = map(int, d["ball_bbox"])
+        #     cv2.rectangle(frame_debug,(x1,y1),(x2,y2),(0,255,0),2)
 
-        if d["bat_bbox"] is not None:
-            x1,y1,x2,y2 = map(int, d["bat_bbox"])
-            cv2.rectangle(frame_debug,(x1,y1),(x2,y2),(255,0,0),2)
+        # if d["bat_bbox"] is not None:
+        #     x1,y1,x2,y2 = map(int, d["bat_bbox"])
+        #     cv2.rectangle(frame_debug,(x1,y1),(x2,y2),(255,0,0),2)
 
-        cv2.putText(frame_debug,"CONTACT FRAME",(40,40),
-                    cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
+        # cv2.putText(frame_debug,"CONTACT FRAME",(40,40),
+        #             cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
 
-        cv2.imwrite(save_path, frame_debug)
+        # cv2.imwrite(save_path, frame_debug)
 
-        print(f"📸 Contact frame saved → {save_path}")
+        # print(f"📸 Contact frame saved → {save_path}")
 
         print(f"✓ Contact frame: {contact_idx}/{n}  method: {method}")
         print("-" * 55)
@@ -466,8 +466,8 @@ class BallBatDetector:
         distance = self._bbox_distance(ball_bbox, bat_bbox)
 
         # Hard contact condition
-        if distance > 60:
-            return 0.0
+        # if distance > 60:
+        #     return 0.0
 
         proximity = np.exp(-distance / 30.0)
         score += proximity * 0.40

@@ -24,10 +24,10 @@ class Config:
     YOLO_MODEL = "yolov8s.pt"  # Small model, good balance
     
     # Training parameters
-    IMG_SIZE = 640  # YOLOv8 works best at 640
+    IMG_SIZE = 832  # YOLOv8 works best at 640
     BATCH_SIZE = 8 if torch.cuda.is_available() else 4  # Lower for CPU
-    NUM_EPOCHS = 35
-    LEARNING_RATE = 0.01
+    NUM_EPOCHS = 75
+    LEARNING_RATE = 0.003
     
     # Augmentation
     AUGMENT = True
@@ -129,17 +129,17 @@ def train_model():
         'hsv_v': 0.4,    # HSV-Value augmentation
         'degrees': 5.0,  # Slight rotation for cricket shots
         'translate': 0.1,  # Translation
-        'scale': 0.5,    # Scale
+        'scale': 0.8,    # Scale
         'shear': 0.0,    # Shear
         'perspective': 0.0,  # Perspective
         'flipud': 0.0,   # Flip up-down
         'fliplr': 0.5,   # Flip left-right
-        'mosaic': 1.0,   # Mosaic augmentation
+        'mosaic': 0.5,   # Mosaic augmentation
         'mixup': 0.0,    # Mixup augmentation
         'copy_paste': 0.0,  # Copy-paste augmentation
         
         # Small object optimization - CRITICAL FOR TINY BALLS
-        'box': 7.5,      # Box loss gain (higher for small objects)
+        'box': 10.0,      # Box loss gain (higher for small objects)
         'cls': 0.5,      # Class loss gain
         'dfl': 1.5,      # DFL loss gain
         'iou': 0.7,      # IoU training threshold
