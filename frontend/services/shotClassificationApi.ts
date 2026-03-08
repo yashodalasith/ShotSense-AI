@@ -134,7 +134,7 @@ export const getShotTypes = async (): Promise<ShotType[]> => {
  */
 export const analyzeShot = async (
   videoUri: string,
-  intendedShot: string
+  intendedShot: string,
 ): Promise<AnalysisResult> => {
   const formData = new FormData();
 
@@ -181,4 +181,114 @@ export const checkApiHealth = async (): Promise<boolean> => {
     console.error("API health check failed:", error);
     return false;
   }
+};
+
+// -------------------------
+// Stance Consistency APIs
+// -------------------------
+
+export interface StanceQuickCompareResult {
+  similarity_score: number;
+  rating: string;
+  video1_consistency: number;
+  video2_consistency: number;
+  feedback: string;
+}
+
+export interface StanceAnalysisResult {
+  summary: any;
+  individual_video_scores: any[];
+  consistency_analysis: any;
+  feedback: any;
+  insights?: any;
+}
+
+/**
+ * Quick compare two stance videos
+ */
+export const quickCompareStances = async (
+  videoUri1: string,
+  videoUri2: string,
+): Promise<StanceQuickCompareResult> => {
+  const formData = new FormData();
+
+  if (Platform.OS === "web") {
+    const r1 = await fetch(videoUri1);
+    const b1 = await r1.blob();
+    formData.append("video1", b1, "video1.mp4");
+    const r2 = await fetch(videoUri2);
+    const b2 = await r2.blob();
+    formData.append("video2", b2, "video2.mp4");
+  } else {
+    const n1 = videoUri1.split("/").pop() || "video1.mp4";
+    const n2 = videoUri2.split("/").pop() || "video2.mp4";
+    formData.append("video1", {
+      uri: videoUri1,
+      name: n1,
+      type: "video/mp4",
+    } as any);
+    formData.append("video2", {
+      uri: videoUri2,
+      name: n2,
+      type: "video/mp4",
+    } as any);
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/stance-consistency/quick-compare`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+
+  const data = await response.json();
+
+  if (data.success && data.data) {
+    return data.data as StanceQuickCompareResult;
+  }
+
+  throw new Error(data.message || "Quick compare failed");
+};
+
+/**
+ * Analyze multiple stance videos (full consistency analysis)
+ */
+export const analyzeStanceConsistency = async (
+  videoUris: string[],
+): Promise<StanceAnalysisResult> => {
+  const formData = new FormData();
+
+  if (!Array.isArray(videoUris) || videoUris.length < 2) {
+    throw new Error(
+      "At least two videos are required for stance consistency analysis",
+    );
+  }
+
+  if (Platform.OS === "web") {
+    for (let i = 0; i < videoUris.length; i++) {
+      const r = await fetch(videoUris[i]);
+      const b = await r.blob();
+      formData.append("videos", b, `video_${i + 1}.mp4`);
+    }
+  } else {
+    for (let i = 0; i < videoUris.length; i++) {
+      const uri = videoUris[i];
+      const name = uri.split("/").pop() || `video_${i + 1}.mp4`;
+      formData.append("videos", { uri, name, type: "video/mp4" } as any);
+    }
+  }
+
+  const response = await fetch(`${API_BASE_URL}/stance-consistency/analyze`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await response.json();
+
+  if (data.success && data.data) {
+    return data.data as StanceAnalysisResult;
+  }
+
+  throw new Error(data.message || "Stance consistency analysis failed");
 };

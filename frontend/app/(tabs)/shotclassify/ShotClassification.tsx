@@ -10,8 +10,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Pressable,
+  TouchableOpacity,
   ActivityIndicator,
   Alert,
   Dimensions,
@@ -38,7 +38,11 @@ import {
   analyzeShot,
   ShotType,
   AnalysisResult,
+  quickCompareStances,
+  analyzeStanceConsistency,
+  StanceQuickCompareResult,
 } from "../../../services/shotClassificationApi";
+import { theme } from "../../../theme/theme";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const isSmallScreen = SCREEN_HEIGHT < 700;
@@ -65,9 +69,9 @@ interface SpiderChartProps {
 }
 
 const SpiderChart: React.FC<SpiderChartProps> = ({ data }) => {
-  const size = SCREEN_WIDTH - 80;
+  const size = SCREEN_WIDTH - 64;
   const center = size / 2;
-  const radius = size / 2 - 40;
+  const radius = size / 2 - 46;
   const categories = [
     "Torso",
     "Front Elbow",
@@ -149,26 +153,26 @@ const SpiderChart: React.FC<SpiderChartProps> = ({ data }) => {
         <Polygon
           points={perfectPolygon}
           fill="rgba(0, 255, 136, 0.1)"
-          stroke="#00ff88"
+          stroke={theme.colors.neonAccent}
           strokeWidth="2"
         />
 
         <Polygon
           points={userPolygon}
-          fill="rgba(255, 59, 48, 0.2)"
-          stroke="#ff3b30"
+          fill="rgba(255, 255, 255, 0.1)"
+          stroke="rgba(255, 255, 255, 0.75)"
           strokeWidth="2"
         />
 
         {categories.map((cat, i) => {
-          const labelPoint = getPoint(i, 115);
+          const labelPoint = getPoint(i, 106);
           return (
             <SvgText
               key={cat}
               x={labelPoint.x}
               y={labelPoint.y}
-              fill="#00ff88"
-              fontSize="12"
+              fill={theme.colors.neonAccent}
+              fontSize="10"
               fontWeight="bold"
               textAnchor="middle"
             >
@@ -181,13 +185,19 @@ const SpiderChart: React.FC<SpiderChartProps> = ({ data }) => {
       <View style={styles.spiderLegend}>
         <View style={styles.spiderLegendItem}>
           <View
-            style={[styles.spiderLegendDot, { backgroundColor: "#00ff88" }]}
+            style={[
+              styles.spiderLegendDot,
+              { backgroundColor: theme.colors.neonAccent },
+            ]}
           />
           <Text style={styles.spiderLegendText}>Perfect Form</Text>
         </View>
         <View style={styles.spiderLegendItem}>
           <View
-            style={[styles.spiderLegendDot, { backgroundColor: "#ff3b30" }]}
+            style={[
+              styles.spiderLegendDot,
+              { backgroundColor: "rgba(255, 255, 255, 0.75)" },
+            ]}
           />
           <Text style={styles.spiderLegendText}>Your Execution</Text>
         </View>
@@ -210,32 +220,33 @@ const MistakeModal: React.FC<MistakeModalProps> = ({
   if (!mistake) return null;
 
   const getSeverityConfig = (severity: string) => {
+    const common = {
+      color: theme.colors.neonAccent,
+      bgColor: "rgba(0, 255, 136, 0.08)",
+    };
+
     switch (severity.toLowerCase()) {
       case "critical":
         return {
-          color: "#ff3b30",
-          bgColor: "rgba(255, 59, 48, 0.1)",
+          ...common,
           label: "CRITICAL",
           description: "Immediate attention required",
         };
       case "major":
         return {
-          color: "#ff9500",
-          bgColor: "rgba(255, 149, 0, 0.1)",
+          ...common,
           label: "MAJOR",
           description: "Significant improvement needed",
         };
       case "minor":
         return {
-          color: "#ffcc00",
-          bgColor: "rgba(255, 204, 0, 0.1)",
+          ...common,
           label: "MINOR",
           description: "Fine-tuning recommended",
         };
       default:
         return {
-          color: "#00ff88",
-          bgColor: "rgba(0, 255, 136, 0.1)",
+          ...common,
           label: "NEGLIGIBLE",
           description: "Good form overall",
         };
@@ -270,12 +281,7 @@ const MistakeModal: React.FC<MistakeModalProps> = ({
               bounces={false}
             >
               {/* Header */}
-              <View
-                style={[
-                  styles.modalHeaderCentered,
-                  { backgroundColor: severityConfig.color },
-                ]}
-              >
+              <View style={styles.modalHeaderCentered}>
                 <View style={styles.modalHeaderContent}>
                   <Text style={styles.modalTitle}>
                     {mistake.body_part.toUpperCase()}
@@ -364,7 +370,7 @@ const MistakeModal: React.FC<MistakeModalProps> = ({
                     <View
                       style={[
                         styles.sectionIconContainer,
-                        { backgroundColor: "rgba(255, 59, 48, 0.1)" },
+                        { backgroundColor: "rgba(0, 255, 136, 0.1)" },
                       ]}
                     >
                       <Text style={styles.sectionIcon}>⚠️</Text>
@@ -401,7 +407,7 @@ const MistakeModal: React.FC<MistakeModalProps> = ({
                   style={styles.modalCloseButton}
                 >
                   <LinearGradient
-                    colors={[severityConfig.color, severityConfig.color]}
+                    colors={[theme.colors.neonAccent, theme.colors.neonAccent]}
                     style={styles.modalCloseGradient}
                   >
                     <Text style={styles.modalCloseText}>Got it!</Text>
@@ -679,6 +685,8 @@ export default function ShotClassificationScreen() {
   const [activeTab, setActiveTab] = useState<"shot" | "stance">("shot");
   const [stanceVideos, setStanceVideos] = useState<string[]>([]);
   const [stanceLoading, setStanceLoading] = useState(false);
+  const [stanceQuickResult, setStanceQuickResult] =
+    useState<StanceQuickCompareResult | null>(null);
   const [stanceAnalysisResult, setStanceAnalysisResult] = useState<any | null>(
     null,
   );
@@ -803,6 +811,8 @@ export default function ShotClassificationScreen() {
 
     try {
       setStanceLoading(true);
+      const res = await quickCompareStances(stanceVideos[0], stanceVideos[1]);
+      setStanceQuickResult(res);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Compare failed";
       Alert.alert("Compare Failed", msg);
@@ -819,7 +829,8 @@ export default function ShotClassificationScreen() {
 
     try {
       setStanceLoading(true);
-
+      const res = await analyzeStanceConsistency(stanceVideos);
+      setStanceAnalysisResult(res);
       // optionally show summary
       Alert.alert(
         "Analysis Complete",
@@ -879,7 +890,7 @@ export default function ShotClassificationScreen() {
           </Text>
         </Animated.View>
 
-        <View style={styles.heroStats}>
+        {/* <View style={styles.heroStats}>
           {[
             { value: "99.2%", label: "Accuracy" },
             { value: "Real-time", label: "Analysis" },
@@ -902,7 +913,7 @@ export default function ShotClassificationScreen() {
               </Text>
             </Animated.View>
           ))}
-        </View>
+        </View> */}
       </LinearGradient>
 
       {/* Tabs: Shot vs Stance */}
@@ -922,15 +933,20 @@ export default function ShotClassificationScreen() {
           <LinearGradient
             colors={
               activeTab === "shot"
-                ? ["#00ff88", "#00cc6f"]
-                : ["#1a1a1a", "#1a1a1a"]
+                ? [theme.colors.neonAccent, theme.colors.neonAccent]
+                : [theme.colors.navCard, theme.colors.navCard]
             }
-            style={{ padding: 12, borderRadius: 12, alignItems: "center" }}
+            style={{ padding: 14, borderRadius: 40, alignItems: "center" }}
           >
             <Text
               style={{
-                color: activeTab === "shot" ? "#000" : "#00ff88",
-                fontWeight: "800",
+                color:
+                  activeTab === "shot"
+                    ? theme.colors.background
+                    : theme.colors.navInactiveText,
+                fontWeight: "900",
+                fontSize: 14,
+                letterSpacing: 0.3,
               }}
             >
               Shot Analyzer
@@ -946,15 +962,20 @@ export default function ShotClassificationScreen() {
           <LinearGradient
             colors={
               activeTab === "stance"
-                ? ["#00ff88", "#00cc6f"]
-                : ["#1a1a1a", "#1a1a1a"]
+                ? [theme.colors.neonAccent, theme.colors.neonAccent]
+                : [theme.colors.navCard, theme.colors.navCard]
             }
-            style={{ padding: 12, borderRadius: 12, alignItems: "center" }}
+            style={{ padding: 14, borderRadius: 40, alignItems: "center" }}
           >
             <Text
               style={{
-                color: activeTab === "stance" ? "#000" : "#00ff88",
-                fontWeight: "800",
+                color:
+                  activeTab === "stance"
+                    ? theme.colors.background
+                    : theme.colors.navInactiveText,
+                fontWeight: "900",
+                fontSize: 14,
+                letterSpacing: 0.3,
               }}
             >
               Stance Tracker
@@ -979,120 +1000,80 @@ export default function ShotClassificationScreen() {
                 </View>
               </View>
 
-              <View style={{ gap: 12 }}>
-                <Text
-                  style={{
-                    color: "#00ff88",
-                    fontWeight: "700",
-                    fontSize: 12,
-                    marginBottom: 4,
-                  }}
-                >
-                  VIDEOS ADDED ({stanceVideos.length})
-                </Text>
+              <View style={styles.uploadBlock}>
+                <View style={styles.uploadBlockHeader}>
+                  <Text style={styles.uploadBlockTitle}>STANCE VIDEOS</Text>
+                  <View style={styles.uploadCountPill}>
+                    <Text style={styles.uploadCountText}>
+                      {stanceVideos.length}
+                    </Text>
+                  </View>
+                </View>
 
                 {stanceVideos.length === 0 ? (
-                  <View style={{ padding: 20, alignItems: "center" }}>
-                    <Text style={{ color: "#666", fontSize: 14 }}>
+                  <View style={styles.uploadEmptyState}>
+                    <Text style={styles.uploadEmptyTitle}>
                       No videos added yet
+                    </Text>
+                    <Text style={styles.uploadEmptySubtext}>
+                      Add at least 2 videos for consistency analysis
                     </Text>
                   </View>
                 ) : (
-                  stanceVideos.map((uri, idx) => (
-                    <View
-                      key={idx}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "rgba(0, 255, 136, 0.05)",
-                        padding: 12,
-                        borderRadius: 10,
-                        borderLeftWidth: 4,
-                        borderLeftColor: "#00ff88",
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            color: "#00ff88",
-                            fontWeight: "800",
-                            fontSize: 13,
-                          }}
+                  <View style={styles.uploadVideoList}>
+                    {stanceVideos.map((uri, idx) => (
+                      <View key={idx} style={styles.uploadVideoRow}>
+                        <View style={styles.uploadVideoIndexWrap}>
+                          <Text style={styles.uploadVideoIndex}>{idx + 1}</Text>
+                        </View>
+                        <View style={styles.uploadVideoMeta}>
+                          <Text style={styles.uploadVideoTitle}>
+                            Video {idx + 1}
+                          </Text>
+                          <Text
+                            style={styles.uploadVideoFilename}
+                            numberOfLines={1}
+                          >
+                            {uri.split("/").pop()}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => removeStanceVideo(idx)}
+                          activeOpacity={0.7}
+                          style={styles.uploadRemoveButton}
                         >
-                          Video {idx + 1}
-                        </Text>
-                        <Text
-                          style={{ color: "#999", fontSize: 11, marginTop: 2 }}
-                          numberOfLines={1}
-                        >
-                          {uri.split("/").pop()}
-                        </Text>
+                          <Text style={styles.uploadRemoveText}>Remove</Text>
+                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity
-                        onPress={() => removeStanceVideo(idx)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={{
-                            color: "#ff3b30",
-                            fontWeight: "800",
-                            fontSize: 12,
-                          }}
-                        >
-                          ✕
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))
+                    ))}
+                  </View>
                 )}
 
-                <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
+                <View style={styles.uploadActionsRow}>
                   <TouchableOpacity
                     onPress={pickStanceVideo}
                     activeOpacity={0.8}
-                    style={{ flex: 1 }}
+                    style={styles.uploadActionSecondary}
                   >
-                    <LinearGradient
-                      colors={["#00ff88", "#00cc6f"]}
-                      style={{
-                        padding: 14,
-                        borderRadius: 12,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontWeight: "800",
-                          color: "#000",
-                          fontSize: 13,
-                        }}
-                      >
-                        📁 Pick Video
-                      </Text>
-                    </LinearGradient>
+                    <Text style={styles.uploadActionSecondaryText}>
+                      Pick Video
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={handleTakeStanceVideo}
                     activeOpacity={0.8}
-                    style={{ flex: 1 }}
+                    style={styles.uploadActionPrimaryWrap}
                   >
                     <LinearGradient
-                      colors={["#00ffff", "#00cccc"]}
-                      style={{
-                        padding: 14,
-                        borderRadius: 12,
-                        alignItems: "center",
-                      }}
+                      colors={[
+                        theme.colors.neonAccent,
+                        theme.colors.neonAccent,
+                      ]}
+                      style={styles.uploadActionPrimary}
                     >
-                      <Text
-                        style={{
-                          fontWeight: "800",
-                          color: "#000",
-                          fontSize: 13,
-                        }}
-                      >
-                        🎥 Take Video
+                      <Text style={styles.uploadActionPrimaryText}>
+                        Take Video
                       </Text>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -1108,10 +1089,10 @@ export default function ShotClassificationScreen() {
                   }}
                 >
                   <LinearGradient
-                    colors={["#00ffff", "#00cccc"]}
+                    colors={[theme.colors.neonAccent, theme.colors.neonAccent]}
                     style={{
                       padding: 14,
-                      borderRadius: 12,
+                      borderRadius: 40,
                       alignItems: "center",
                       flexDirection: "row",
                       justifyContent: "center",
@@ -1120,11 +1101,14 @@ export default function ShotClassificationScreen() {
                   >
                     {stanceLoading ? (
                       <>
-                        <ActivityIndicator color="#000" size="small" />
+                        <ActivityIndicator
+                          color={theme.colors.background}
+                          size="small"
+                        />
                         <Text
                           style={{
                             fontWeight: "800",
-                            color: "#000",
+                            color: theme.colors.background,
                             fontSize: 14,
                           }}
                         >
@@ -1135,11 +1119,11 @@ export default function ShotClassificationScreen() {
                       <Text
                         style={{
                           fontWeight: "800",
-                          color: "#000",
+                          color: theme.colors.background,
                           fontSize: 14,
                         }}
                       >
-                        🎯 Analyze Consistency ({stanceVideos.length})
+                        Analyze Consistency ({stanceVideos.length})
                       </Text>
                     )}
                   </LinearGradient>
@@ -1148,7 +1132,7 @@ export default function ShotClassificationScreen() {
                 {stanceVideos.length < 2 && (
                   <Text
                     style={{
-                      color: "#ff9500",
+                      color: theme.colors.subtext,
                       fontSize: 12,
                       textAlign: "center",
                       marginTop: 8,
@@ -1181,8 +1165,8 @@ export default function ShotClassificationScreen() {
                 >
                   <Text
                     style={{
-                      color: "#00ff88",
-                      fontWeight: "800",
+                      color: theme.colors.neonAccent,
+                      fontWeight: "900",
                       fontSize: 18,
                     }}
                   >
@@ -1192,8 +1176,8 @@ export default function ShotClassificationScreen() {
                 <Text
                   style={{
                     marginLeft: 12,
-                    color: "#00ff88",
-                    fontWeight: "800",
+                    color: "#FFFFFF",
+                    fontWeight: "900",
                     fontSize: 16,
                   }}
                 >
@@ -1214,7 +1198,7 @@ export default function ShotClassificationScreen() {
                         height: 140,
                         borderRadius: 70,
                         borderWidth: 6,
-                        borderColor: "#00ff88",
+                        borderColor: theme.colors.neonAccent,
                         backgroundColor: "rgba(0, 255, 136, 0.08)",
                         justifyContent: "center",
                         alignItems: "center",
@@ -1224,7 +1208,7 @@ export default function ShotClassificationScreen() {
                         style={{
                           fontSize: 48,
                           fontWeight: "900",
-                          color: "#00ff88",
+                          color: theme.colors.neonAccent,
                         }}
                       >
                         {stanceAnalysisResult?.summary?.overall_consistency_score?.toFixed(
@@ -1235,7 +1219,7 @@ export default function ShotClassificationScreen() {
                       <Text
                         style={{
                           fontSize: 11,
-                          color: "#00cc6f",
+                          color: theme.colors.neonAccent,
                           fontWeight: "700",
                           marginTop: 4,
                         }}
@@ -1260,7 +1244,12 @@ export default function ShotClassificationScreen() {
                       <Text style={{ color: "#999", fontWeight: "600" }}>
                         Rating
                       </Text>
-                      <Text style={{ color: "#00ff88", fontWeight: "800" }}>
+                      <Text
+                        style={{
+                          color: theme.colors.neonAccent,
+                          fontWeight: "800",
+                        }}
+                      >
                         {stanceAnalysisResult?.summary?.consistency_rating}
                       </Text>
                     </View>
@@ -1277,7 +1266,12 @@ export default function ShotClassificationScreen() {
                       <Text style={{ color: "#999", fontWeight: "600" }}>
                         Videos Analyzed
                       </Text>
-                      <Text style={{ color: "#00ff88", fontWeight: "800" }}>
+                      <Text
+                        style={{
+                          color: theme.colors.neonAccent,
+                          fontWeight: "800",
+                        }}
+                      >
                         {stanceAnalysisResult?.summary?.total_videos_analyzed}
                       </Text>
                     </View>
@@ -1294,7 +1288,12 @@ export default function ShotClassificationScreen() {
                       <Text style={{ color: "#999", fontWeight: "600" }}>
                         Std Deviation
                       </Text>
-                      <Text style={{ color: "#00ff88", fontWeight: "800" }}>
+                      <Text
+                        style={{
+                          color: theme.colors.neonAccent,
+                          fontWeight: "800",
+                        }}
+                      >
                         {stanceAnalysisResult?.summary?.consistency_std?.toFixed(
                           2,
                         )}
@@ -1331,7 +1330,7 @@ export default function ShotClassificationScreen() {
                           </Text>
                           <Text
                             style={{
-                              color: "#00ff88",
+                              color: theme.colors.neonAccent,
                               fontWeight: "800",
                               fontSize: 14,
                             }}
@@ -1348,7 +1347,10 @@ export default function ShotClassificationScreen() {
                           }}
                         >
                           <LinearGradient
-                            colors={["#00ff88", "#00cc6f"]}
+                            colors={[
+                              theme.colors.neonAccent,
+                              theme.colors.neonAccent,
+                            ]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={{
@@ -1381,7 +1383,7 @@ export default function ShotClassificationScreen() {
                         backgroundColor: "rgba(0, 255, 136, 0.03)",
                         borderRadius: 10,
                         borderLeftWidth: 3,
-                        borderLeftColor: "#00ffff",
+                        borderLeftColor: theme.colors.neonAccent,
                       }}
                     >
                       <View
@@ -1392,7 +1394,7 @@ export default function ShotClassificationScreen() {
                         }}
                       >
                         <Text style={{ color: "#00ff88", fontWeight: "800" }}>Video {detail.video_index}</Text>
-                        <Text style={{ color: "#00ffff", fontWeight: "800" }}>{detail.stance_timing}</Text>
+                        <Text style={{ color: theme.colors.neonAccent, fontWeight: "800" }}>{detail.stance_timing}</Text>
                       </View>
                       <Text style={{ color: "#999", fontSize: 12 }}>
                         Frame {detail.stance_frame} of {detail.total_frames}
@@ -1435,8 +1437,7 @@ export default function ShotClassificationScreen() {
                           </Text>
                           <Text
                             style={{
-                              color:
-                                pair.similarity === 100 ? "#00ff88" : "#ffcc00",
+                              color: theme.colors.neonAccent,
                               fontWeight: "800",
                               fontSize: 13,
                             }}
@@ -1453,11 +1454,10 @@ export default function ShotClassificationScreen() {
                           }}
                         >
                           <LinearGradient
-                            colors={
-                              pair.similarity === 100
-                                ? ["#00ff88", "#00cc6f"]
-                                : ["#ffcc00", "#ff9500"]
-                            }
+                            colors={[
+                              theme.colors.neonAccent,
+                              theme.colors.neonAccent,
+                            ]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={{
@@ -1482,14 +1482,14 @@ export default function ShotClassificationScreen() {
                     style={{
                       padding: 14,
                       backgroundColor: "rgba(0, 255, 136, 0.08)",
-                      borderRadius: 12,
+                      borderRadius: 16,
                       borderLeftWidth: 4,
-                      borderLeftColor: "#00ff88",
+                      borderLeftColor: theme.colors.neonAccent,
                     }}
                   >
                     <Text
                       style={{
-                        color: "#00ff88",
+                        color: theme.colors.neonAccent,
                         fontWeight: "800",
                         fontSize: 12,
                         marginBottom: 6,
@@ -1511,14 +1511,14 @@ export default function ShotClassificationScreen() {
                     style={{
                       padding: 14,
                       backgroundColor: "rgba(0, 255, 136, 0.05)",
-                      borderRadius: 12,
+                      borderRadius: 16,
                       borderLeftWidth: 4,
-                      borderLeftColor: "#00ff88",
+                      borderLeftColor: theme.colors.neonAccent,
                     }}
                   >
                     <Text
                       style={{
-                        color: "#00ff88",
+                        color: theme.colors.neonAccent,
                         fontWeight: "800",
                         fontSize: 12,
                         marginBottom: 6,
@@ -1539,15 +1539,15 @@ export default function ShotClassificationScreen() {
                   <View
                     style={{
                       padding: 14,
-                      backgroundColor: "rgba(255, 149, 0, 0.05)",
-                      borderRadius: 12,
+                      backgroundColor: "rgba(0, 255, 136, 0.05)",
+                      borderRadius: 16,
                       borderLeftWidth: 4,
-                      borderLeftColor: "#ff9500",
+                      borderLeftColor: theme.colors.neonAccent,
                     }}
                   >
                     <Text
                       style={{
-                        color: "#ff9500",
+                        color: theme.colors.neonAccent,
                         fontWeight: "800",
                         fontSize: 12,
                         marginBottom: 6,
@@ -1568,15 +1568,15 @@ export default function ShotClassificationScreen() {
                   <View
                     style={{
                       padding: 14,
-                      backgroundColor: "rgba(0, 255, 200, 0.08)",
-                      borderRadius: 12,
+                      backgroundColor: "rgba(0, 255, 136, 0.08)",
+                      borderRadius: 16,
                       borderLeftWidth: 4,
-                      borderLeftColor: "#00ffc8",
+                      borderLeftColor: theme.colors.neonAccent,
                     }}
                   >
                     <Text
                       style={{
-                        color: "#00ffc8",
+                        color: theme.colors.neonAccent,
                         fontWeight: "800",
                         fontSize: 12,
                         marginBottom: 6,
@@ -1616,12 +1616,12 @@ export default function ShotClassificationScreen() {
                           backgroundColor: "rgba(0, 255, 136, 0.03)",
                           borderRadius: 10,
                           borderLeftWidth: 3,
-                          borderLeftColor: "#00cc6f",
+                          borderLeftColor: theme.colors.neonAccent,
                         }}
                       >
                         <Text
                           style={{
-                            color: "#00ff88",
+                            color: theme.colors.neonAccent,
                             fontWeight: "900",
                             fontSize: 16,
                           }}
@@ -1656,15 +1656,19 @@ export default function ShotClassificationScreen() {
                   activeOpacity={0.8}
                 >
                   <LinearGradient
-                    colors={["#00ff88", "#00cc6f"]}
+                    colors={[theme.colors.neonAccent, theme.colors.neonAccent]}
                     style={{
                       padding: 14,
-                      borderRadius: 12,
+                      borderRadius: 40,
                       alignItems: "center",
                     }}
                   >
                     <Text
-                      style={{ fontWeight: "800", color: "#000", fontSize: 14 }}
+                      style={{
+                        fontWeight: "800",
+                        color: theme.colors.background,
+                        fontSize: 14,
+                      }}
                     >
                       Start New Analysis
                     </Text>
@@ -1707,43 +1711,18 @@ export default function ShotClassificationScreen() {
                     key={shot.value}
                     onPress={() => setSelectedShot(shot.value)}
                     activeOpacity={0.7}
+                    style={[styles.shotChip, isActive && styles.shotChipActive]}
                   >
-                    <LinearGradient
-                      colors={
-                        isActive
-                          ? ["#00ff88", "#00cc6f"]
-                          : [
-                              "rgba(0, 255, 136, 0.1)",
-                              "rgba(0, 204, 111, 0.05)",
-                            ]
-                      }
+                    <Text
                       style={[
-                        styles.shotChip,
-                        isActive && styles.shotChipActive,
+                        styles.shotChipText,
+                        isSmallScreen && { fontSize: 11 },
+                        isActive && styles.shotChipTextActive,
                       ]}
+                      numberOfLines={2}
                     >
-                      <Text
-                        style={[
-                          styles.shotChipText,
-                          isSmallScreen && { fontSize: 11 },
-                          isActive && styles.shotChipTextActive,
-                        ]}
-                      >
-                        {shot.label}
-                      </Text>
-                      {isActive && (
-                        <View style={styles.checkMarkContainer}>
-                          <Text
-                            style={[
-                              styles.checkMark,
-                              isSmallScreen && { fontSize: 14 },
-                            ]}
-                          >
-                            ✓
-                          </Text>
-                        </View>
-                      )}
-                    </LinearGradient>
+                      {shot.label}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
@@ -1761,89 +1740,68 @@ export default function ShotClassificationScreen() {
               </View>
             </View>
 
-            <View style={{ gap: 12 }}>
-              {videoUri && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor: "rgba(0, 255, 136, 0.05)",
-                    padding: 12,
-                    borderRadius: 10,
-                    borderLeftWidth: 4,
-                    borderLeftColor: "#00ff88",
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: "#00ff88",
-                        fontWeight: "800",
-                        fontSize: 13,
-                      }}
-                    >
-                      Video Selected
-                    </Text>
-                    <Text
-                      style={{ color: "#999", fontSize: 11, marginTop: 2 }}
-                      numberOfLines={1}
-                    >
+            <View style={styles.uploadBlock}>
+              <View style={styles.uploadBlockHeader}>
+                <Text style={styles.uploadBlockTitle}>SHOT VIDEO</Text>
+                <View style={styles.uploadCountPill}>
+                  <Text style={styles.uploadCountText}>{videoUri ? 1 : 0}</Text>
+                </View>
+              </View>
+
+              {videoUri ? (
+                <View style={styles.uploadVideoRow}>
+                  <View style={styles.uploadVideoIndexWrap}>
+                    <Text style={styles.uploadVideoIndex}>1</Text>
+                  </View>
+                  <View style={styles.uploadVideoMeta}>
+                    <Text style={styles.uploadVideoTitle}>Video Selected</Text>
+                    <Text style={styles.uploadVideoFilename} numberOfLines={1}>
                       {videoUri.split("/").pop()}
                     </Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => setVideoUri(null)}
                     activeOpacity={0.7}
+                    style={styles.uploadRemoveButton}
                   >
-                    <Text
-                      style={{
-                        color: "#ff3b30",
-                        fontWeight: "800",
-                        fontSize: 12,
-                      }}
-                    >
-                      ✕
-                    </Text>
+                    <Text style={styles.uploadRemoveText}>Remove</Text>
                   </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.uploadEmptyState}>
+                  <Text style={styles.uploadEmptyTitle}>No video selected</Text>
+                  <Text style={styles.uploadEmptySubtext}>
+                    Pick from library or record a new shot video
+                  </Text>
                 </View>
               )}
 
-              <TouchableOpacity onPress={pickVideo} activeOpacity={0.8}>
-                <LinearGradient
-                  colors={["#00ff88", "#00cc6f"]}
-                  style={{
-                    padding: 14,
-                    borderRadius: 12,
-                    alignItems: "center",
-                  }}
+              <View style={styles.uploadActionsRow}>
+                <TouchableOpacity
+                  onPress={pickVideo}
+                  activeOpacity={0.8}
+                  style={styles.uploadActionSecondary}
                 >
-                  <Text
-                    style={{ fontWeight: "800", color: "#000", fontSize: 14 }}
-                  >
-                    📁 Pick from Library
+                  <Text style={styles.uploadActionSecondaryText}>
+                    Pick from Library
                   </Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={handleTakeShotVideo}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={["#00ffff", "#00cccc"]}
-                  style={{
-                    padding: 14,
-                    borderRadius: 12,
-                    alignItems: "center",
-                  }}
+                <TouchableOpacity
+                  onPress={handleTakeShotVideo}
+                  activeOpacity={0.8}
+                  style={styles.uploadActionPrimaryWrap}
                 >
-                  <Text
-                    style={{ fontWeight: "800", color: "#000", fontSize: 14 }}
+                  <LinearGradient
+                    colors={[theme.colors.neonAccent, theme.colors.neonAccent]}
+                    style={styles.uploadActionPrimary}
                   >
-                    🎥 Take Video
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                    <Text style={styles.uploadActionPrimaryText}>
+                      Take Video
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </View>
           </Animated.View>
 
@@ -1857,7 +1815,7 @@ export default function ShotClassificationScreen() {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={["#00ff88", "#00cc6f"]}
+                colors={[theme.colors.neonAccent, theme.colors.neonAccent]}
                 style={[
                   styles.analyzeButton,
                   (!videoUri || !selectedShot || analyzing) &&
@@ -1866,7 +1824,10 @@ export default function ShotClassificationScreen() {
               >
                 {analyzing ? (
                   <>
-                    <ActivityIndicator color="#000" size="small" />
+                    <ActivityIndicator
+                      color={theme.colors.background}
+                      size="small"
+                    />
                     <Text
                       style={[
                         styles.analyzeButtonText,
@@ -1901,8 +1862,8 @@ export default function ShotClassificationScreen() {
                 <LinearGradient
                   colors={
                     result.is_correct
-                      ? ["#00ff88", "#00cc6f"]
-                      : ["#ff9500", "#ff6b00"]
+                      ? [theme.colors.neonAccent, theme.colors.neonAccent]
+                      : [theme.colors.navCard, theme.colors.navCard]
                   }
                   style={styles.statusGradient}
                 >
@@ -1910,6 +1871,11 @@ export default function ShotClassificationScreen() {
                     style={[
                       styles.statusText,
                       isSmallScreen && { fontSize: 14 },
+                      {
+                        color: result.is_correct
+                          ? theme.colors.background
+                          : "#FFFFFF",
+                      },
                     ]}
                   >
                     {result.is_correct
@@ -1940,14 +1906,7 @@ export default function ShotClassificationScreen() {
                     >
                       {score}%
                     </Text>
-                    <Text
-                      style={[
-                        styles.scoreLabel,
-                        isSmallScreen && { fontSize: 9 },
-                      ]}
-                    >
-                      INTENT SCORE
-                    </Text>
+                    <Text style={styles.scoreLabel}>INTENT SCORE</Text>
                   </View>
 
                   <View style={styles.scoreInfo}>
@@ -1992,7 +1951,11 @@ export default function ShotClassificationScreen() {
                         style={[
                           styles.scoreRowValue,
                           isSmallScreen && { fontSize: 12 },
-                          { color: result.is_correct ? "#00ff88" : "#ff9500" },
+                          {
+                            color: result.is_correct
+                              ? theme.colors.neonAccent
+                              : "rgba(255, 255, 255, 0.7)",
+                          },
                         ]}
                       >
                         {result.predicted_shot.toUpperCase()}
@@ -2099,12 +2062,12 @@ export default function ShotClassificationScreen() {
                             {
                               backgroundColor:
                                 mistake.severity === "critical"
-                                  ? "#ff3b30"
+                                  ? theme.colors.neonAccent
                                   : mistake.severity === "major"
-                                    ? "#ff9500"
+                                    ? theme.colors.neonAccent
                                     : mistake.severity === "minor"
-                                      ? "#ffcc00"
-                                      : "#00ff88",
+                                      ? theme.colors.neonAccent
+                                      : theme.colors.neonAccent,
                             },
                           ]}
                         />
@@ -2228,9 +2191,15 @@ export default function ShotClassificationScreen() {
                         <LinearGradient
                           colors={
                             item.shot === result.predicted_shot
-                              ? ["#00ff88", "#00cc6f"]
+                              ? [
+                                  theme.colors.neonAccent,
+                                  theme.colors.neonAccent,
+                                ]
                               : item.shot === result.intended_shot
-                                ? ["#00ffff", "#00cccc"]
+                                ? [
+                                    theme.colors.neonAccent,
+                                    theme.colors.neonAccent,
+                                  ]
                                 : ["#333333", "#1a1a1a"]
                           }
                           style={[
@@ -2354,14 +2323,15 @@ export default function ShotClassificationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: theme.colors.background,
   },
 
   // Hero
   hero: {
-    paddingBottom: 40,
-    paddingHorizontal: 20,
-    backgroundColor: "#0a0a0a",
+    paddingBottom: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.m,
+    backgroundColor: theme.colors.background,
+    paddingTop: theme.spacing.xl,
   },
   heroContent: {
     alignItems: "center",
@@ -2369,51 +2339,69 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 32,
     fontWeight: "900",
-    color: "#00ff88",
-    letterSpacing: 1.5,
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: theme.spacing.s,
   },
   heroSubtitle: {
-    fontSize: 14,
-    color: "#00cc6f",
+    fontSize: 13,
+    fontWeight: "600",
+    color: theme.colors.subtext,
     textAlign: "center",
+    textTransform: "uppercase",
+    letterSpacing: 2,
   },
   heroStats: {
     flexDirection: "row",
     justifyContent: "space-around",
-    marginTop: 24,
+    marginTop: theme.spacing.l,
+    paddingHorizontal: theme.spacing.m,
   },
   stat: {
     alignItems: "center",
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "900",
-    color: "#00ff88",
+    color: "rgba(255, 255, 255, 0.95)",
+    letterSpacing: -0.5,
   },
   statLabel: {
     fontSize: 10,
-    color: "#666666",
+    color: theme.colors.subtext,
     textTransform: "uppercase",
-    letterSpacing: 1,
-    marginTop: 4,
+    letterSpacing: 2,
+    marginTop: theme.spacing.s,
+    fontWeight: "800",
   },
 
   // Card
   card: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    backgroundColor: theme.colors.navCard,
+    borderRadius: 40,
+    padding: theme.spacing.l,
+    marginHorizontal: theme.spacing.m,
+    marginBottom: theme.spacing.l,
     borderWidth: 1,
-    borderColor: "rgba(0, 255, 136, 0.1)",
+    borderColor: "rgba(255, 255, 255, 0.05)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: theme.spacing.l,
+    paddingHorizontal: theme.spacing.s,
   },
   cardHeaderText: {
     flex: 1,
@@ -2421,126 +2409,307 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#00ff88",
-    marginBottom: 4,
+    color: "#FFFFFF",
+    marginBottom: theme.spacing.s,
+    letterSpacing: -0.5,
   },
   cardSubtitle: {
     fontSize: 13,
-    color: "#666666",
+    color: theme.colors.subtext,
+    fontWeight: "500",
   },
   chartHint: {
     fontSize: 11,
-    color: "#888",
+    color: "rgba(255, 255, 255, 0.6)",
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: theme.spacing.m,
+    fontWeight: "500",
   },
 
   // Shot Selection
   shotGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    justifyContent: "space-between",
+    rowGap: theme.spacing.s,
+    columnGap: theme.spacing.s,
+    paddingHorizontal: 0,
   },
   shotChip: {
+    width: "48.5%",
+    minHeight: 50,
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(0, 255, 136, 0.3)",
-    minWidth: (SCREEN_WIDTH - 72) / 3,
+    borderColor: "rgba(255, 255, 255, 0.14)",
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
   },
   shotChipActive: {
-    borderColor: "#00ff88",
+    borderColor: theme.colors.neonAccent,
+    backgroundColor: "rgba(0, 255, 136, 0.12)",
   },
   shotChipText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#00cc6f",
+    color: "rgba(255, 255, 255, 0.88)",
+    letterSpacing: 0,
+    textAlign: "center",
+    lineHeight: 18,
   },
   shotChipTextActive: {
-    color: "#000",
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
   checkMarkContainer: {
     position: "absolute",
     top: -6,
     right: -6,
-    backgroundColor: "#000",
+    backgroundColor: theme.colors.background,
     borderRadius: 10,
     width: 20,
     height: 20,
     alignItems: "center",
     justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: theme.colors.neonAccent,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   checkMark: {
-    color: "#00ff88",
+    color: theme.colors.neonAccent,
     fontSize: 14,
     fontWeight: "bold",
   },
 
   // Upload
   uploadArea: {
-    padding: 24,
-    borderRadius: 12,
+    padding: theme.spacing.l,
+    borderRadius: 20,
     alignItems: "center",
   },
   uploadContent: {
     alignItems: "center",
+    gap: theme.spacing.m,
   },
   uploadTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#000",
-    marginBottom: 4,
+    color: theme.colors.background,
+    marginBottom: theme.spacing.s,
+    letterSpacing: -0.5,
   },
   uploadSubtitle: {
     fontSize: 13,
-    color: "rgba(0, 0, 0, 0.7)",
+    color: `${theme.colors.background}B3`,
+    fontWeight: "500",
+  },
+  uploadBlock: {
+    gap: theme.spacing.m,
+  },
+  uploadBlockHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  uploadBlockTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: theme.colors.neonAccent,
+    letterSpacing: 1.2,
+  },
+  uploadCountPill: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 255, 136, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 136, 0.45)",
+    paddingHorizontal: 8,
+  },
+  uploadCountText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: theme.colors.neonAccent,
+  },
+  uploadEmptyState: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    gap: 4,
+  },
+  uploadEmptyTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.86)",
+  },
+  uploadEmptySubtext: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "rgba(255, 255, 255, 0.56)",
+    textAlign: "center",
+  },
+  uploadVideoList: {
+    gap: theme.spacing.s,
+  },
+  uploadVideoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 255, 136, 0.06)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 136, 0.16)",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    gap: 10,
+  },
+  uploadVideoIndexWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 255, 136, 0.2)",
+  },
+  uploadVideoIndex: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: theme.colors.neonAccent,
+  },
+  uploadVideoMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  uploadVideoTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: theme.colors.neonAccent,
+  },
+  uploadVideoFilename: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "rgba(255, 255, 255, 0.62)",
+  },
+  uploadRemoveButton: {
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.18)",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  uploadRemoveText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.78)",
+  },
+  uploadActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.s,
+  },
+  uploadActionPrimaryWrap: {
+    flex: 1,
+  },
+  uploadActionPrimary: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+    borderRadius: 14,
+  },
+  uploadActionPrimaryText: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: theme.colors.background,
+    letterSpacing: 0.2,
+  },
+  uploadActionSecondary: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+  },
+  uploadActionSecondaryText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "rgba(255, 255, 255, 0.9)",
   },
 
   // Analyze Button
   analyzeButtonContainer: {
-    marginHorizontal: 16,
-    marginBottom: 20,
+    marginHorizontal: theme.spacing.m,
+    marginBottom: theme.spacing.l,
+    marginTop: theme.spacing.m,
   },
   analyzeButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 18,
-    borderRadius: 12,
-    gap: 12,
+    paddingVertical: 20,
+    borderRadius: 40,
+    gap: theme.spacing.m,
+    ...Platform.select({
+      ios: {
+        shadowColor: theme.colors.neonAccent,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   analyzeButtonDisabled: {
     opacity: 0.5,
   },
   analyzeButtonText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#000",
+    fontSize: 18,
+    fontWeight: "900",
+    color: theme.colors.background,
     letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
 
   // Status Badge
   statusBadge: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: theme.spacing.m,
+    marginBottom: theme.spacing.l,
   },
   statusGradient: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: theme.spacing.l,
+    borderRadius: 40,
   },
   statusText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#000",
+    color: theme.colors.text,
     letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
 
   // Score Card
@@ -2554,62 +2723,71 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 8,
-    borderColor: "#00ff88",
-    backgroundColor: "rgba(0, 255, 136, 0.05)",
+    borderColor: theme.colors.neonAccent,
+    backgroundColor: "rgba(0, 255, 136, 0.08)",
     justifyContent: "center",
     alignItems: "center",
   },
   scoreValue: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: "900",
-    color: "#00ff88",
+    color: theme.colors.neonAccent,
+    letterSpacing: -1,
   },
   scoreLabel: {
-    fontSize: 10,
-    color: "#00cc6f",
+    fontSize: 9,
+    color: theme.colors.neonAccent,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
+    fontWeight: "800",
+    textAlign: "center",
+    lineHeight: 11,
+    includeFontPadding: false,
   },
   scoreInfo: {
     flex: 1,
-    gap: 8,
+    gap: theme.spacing.s,
   },
   scoreRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: "rgba(0, 255, 136, 0.05)",
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(0, 255, 136, 0.08)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 136, 0.1)",
   },
   scoreRowLabel: {
     fontSize: 13,
-    color: "#666666",
+    color: theme.colors.subtext,
     fontWeight: "600",
   },
   scoreRowValue: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#00ff88",
+    color: theme.colors.neonAccent,
     textTransform: "uppercase",
+    letterSpacing: -0.3,
   },
 
   // Spider Chart
   spiderContainer: {
     alignItems: "center",
-    paddingVertical: 20,
+    paddingVertical: theme.spacing.l,
+    paddingHorizontal: theme.spacing.m,
   },
   spiderLegend: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 24,
-    marginTop: 16,
+    gap: theme.spacing.l,
+    marginTop: theme.spacing.l,
   },
   spiderLegendItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: theme.spacing.s,
   },
   spiderLegendDot: {
     width: 12,
@@ -2618,7 +2796,7 @@ const styles = StyleSheet.create({
   },
   spiderLegendText: {
     fontSize: 12,
-    color: "#cccccc",
+    color: "rgba(255, 255, 255, 0.8)",
     fontWeight: "600",
   },
 
@@ -2626,11 +2804,12 @@ const styles = StyleSheet.create({
   summaryCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    backgroundColor: "rgba(0, 255, 136, 0.05)",
-    borderRadius: 12,
-    marginBottom: 8,
-    gap: 12,
+    padding: theme.spacing.l,
+    backgroundColor: "rgba(0, 255, 136, 0.08)",
+    borderRadius: 16,
+    marginBottom: theme.spacing.m,
+    marginHorizontal: theme.spacing.m,
+    gap: theme.spacing.m,
     borderWidth: 1,
     borderColor: "rgba(0, 255, 136, 0.1)",
   },
@@ -2638,6 +2817,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 40,
     borderRadius: 2,
+    backgroundColor: theme.colors.neonAccent,
   },
   summaryContent: {
     flex: 1,
@@ -2645,124 +2825,145 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#00ff88",
-    marginBottom: 4,
+    color: "#FFFFFF",
+    marginBottom: theme.spacing.s,
+    letterSpacing: -0.3,
   },
   summaryText: {
     fontSize: 12,
-    color: "#999999",
-    lineHeight: 16,
+    color: "rgba(255, 255, 255, 0.65)",
+    lineHeight: 18,
+    fontWeight: "500",
   },
   summaryArrow: {
     fontSize: 24,
-    color: "#00ff88",
+    color: theme.colors.neonAccent,
     fontWeight: "300",
   },
 
   // Modal - Centered
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    backgroundColor: "rgba(0, 0, 0, 0.92)",
     justifyContent: "center",
     alignItems: "center",
   },
   modalWrapper: {
-    width: "90%",
+    width: "88%",
     maxWidth: 500,
     maxHeight: SCREEN_HEIGHT * 0.85,
   },
   modalContentCentered: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 20,
+    backgroundColor: theme.colors.navCard,
+    borderRadius: 28,
     overflow: "hidden",
-    elevation: 10,
-    shadowColor: "#00ff88",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(0, 255, 136, 0.2)",
+    borderColor: "rgba(255, 255, 255, 0.05)",
     minHeight: 400,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.5,
+        shadowRadius: 32,
+      },
+      android: {
+        elevation: 15,
+      },
+    }),
   },
   modalScrollView: {
     flex: 1,
   },
   modalHeaderCentered: {
-    padding: 24,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    padding: theme.spacing.l,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: theme.colors.navCard,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.05)",
   },
   modalHeaderContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: theme.spacing.s,
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: "900",
-    color: "#000",
+    color: "rgba(255, 255, 255, 0.95)",
     flex: 1,
+    letterSpacing: -0.5,
   },
   modalSubtitle: {
     fontSize: 13,
-    color: "rgba(0, 0, 0, 0.7)",
+    color: "rgba(255, 255, 255, 0.7)",
     fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   modalSeverityBadge: {
-    backgroundColor: "rgba(0, 0, 0, 0.2)",
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    backgroundColor: "rgba(0, 255, 136, 0.1)",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 136, 0.2)",
   },
   modalSeverityText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#000",
-    letterSpacing: 0.5,
+    color: theme.colors.neonAccent,
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
   modalBody: {
-    padding: 24,
+    padding: theme.spacing.l,
+    gap: theme.spacing.l,
   },
 
   // Severity Card
   severityCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 24,
+    padding: theme.spacing.l,
+    borderRadius: 20,
+    marginBottom: theme.spacing.l,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderColor: "rgba(0, 255, 136, 0.1)",
+    backgroundColor: "rgba(0, 255, 136, 0.05)",
   },
   severityHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: theme.spacing.l,
   },
   severityTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#cccccc",
+    color: "rgba(255, 255, 255, 0.85)",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   severityPercentage: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "900",
+    color: theme.colors.neonAccent,
+    letterSpacing: -1,
   },
   severityProgressContainer: {
-    marginBottom: 16,
+    marginBottom: theme.spacing.l,
   },
   severityProgressBg: {
-    height: 12,
-    backgroundColor: "#2a2a2a",
-    borderRadius: 6,
+    height: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    borderRadius: 5,
     overflow: "hidden",
-    marginBottom: 8,
+    marginBottom: theme.spacing.s,
   },
   severityProgressFill: {
     height: "100%",
-    borderRadius: 6,
+    borderRadius: 5,
   },
   severityLabels: {
     flexDirection: "row",
@@ -2770,13 +2971,14 @@ const styles = StyleSheet.create({
   },
   severityLabelText: {
     fontSize: 10,
-    color: "#666666",
-    fontWeight: "600",
+    color: theme.colors.subtext,
+    fontWeight: "700",
   },
   severityIndicatorRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: theme.spacing.m,
+    paddingVertical: theme.spacing.s,
   },
   severityDot: {
     width: 10,
@@ -2785,80 +2987,99 @@ const styles = StyleSheet.create({
   },
   severityIndicatorText: {
     fontSize: 13,
-    color: "#999999",
+    color: "rgba(255, 255, 255, 0.7)",
     flex: 1,
+    fontWeight: "500",
   },
 
   // Modal Sections
   modalSection: {
-    marginBottom: 24,
+    marginBottom: theme.spacing.l,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
+    gap: theme.spacing.m,
+    marginBottom: theme.spacing.m,
   },
   sectionIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "rgba(0, 255, 136, 0.1)",
   },
   sectionIcon: {
-    fontSize: 18,
+    fontSize: 20,
+    color: theme.colors.neonAccent,
   },
   modalSectionLabel: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#00ff88",
+    color: "#FFFFFF",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   modalSectionText: {
     fontSize: 15,
-    color: "#cccccc",
-    lineHeight: 22,
+    color: "rgba(255, 255, 255, 0.8)",
+    lineHeight: 24,
     paddingLeft: 48,
+    fontWeight: "500",
   },
   modalCloseButton: {
-    marginTop: 8,
+    marginTop: theme.spacing.l,
   },
   modalCloseGradient: {
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: theme.colors.neonAccent,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   modalCloseText: {
     fontSize: 16,
     fontWeight: "800",
     color: "#fff",
-    letterSpacing: 0.5,
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
 
   // Feedback
   feedbackBox: {
-    padding: 20,
-    borderRadius: 12,
+    padding: theme.spacing.l,
+    borderRadius: 18,
     backgroundColor: "rgba(0, 255, 136, 0.05)",
     borderWidth: 1,
     borderColor: "rgba(0, 255, 136, 0.1)",
+    marginHorizontal: theme.spacing.m,
   },
   feedbackText: {
     fontSize: 15,
-    color: "#cccccc",
+    color: "rgba(255, 255, 255, 0.85)",
     lineHeight: 24,
+    fontWeight: "500",
   },
 
   // Radar Chart
   radarContainer: {
-    gap: 12,
+    gap: theme.spacing.l,
+    paddingHorizontal: theme.spacing.m,
   },
   radarRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: theme.spacing.m,
   },
   radarLeft: {
     width: 100,
@@ -2866,24 +3087,28 @@ const styles = StyleSheet.create({
   radarShot: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#00ff88",
+    color: "#FFFFFF",
     textTransform: "uppercase",
-    marginBottom: 2,
+    marginBottom: theme.spacing.s,
+    letterSpacing: -0.3,
   },
   radarBadges: {
     flexDirection: "column",
-    gap: 2,
+    gap: 4,
   },
   radarBadge: {
     fontSize: 10,
-    color: "#00cc6f",
+    color: theme.colors.neonAccent,
+    fontWeight: "600",
   },
   radarBarBg: {
     flex: 1,
     height: 28,
-    backgroundColor: "#2a2a2a",
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
     borderRadius: 14,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 136, 0.1)",
   },
   radarBarFill: {
     height: "100%",
@@ -2893,47 +3118,52 @@ const styles = StyleSheet.create({
     width: 60,
     fontSize: 13,
     fontWeight: "800",
-    color: "#00ff88",
+    color: theme.colors.neonAccent,
     textAlign: "right",
+    letterSpacing: -0.3,
   },
 
   // Detection Info
   detectionInfo: {
-    gap: 16,
+    gap: theme.spacing.l,
+    paddingHorizontal: theme.spacing.m,
   },
   detectionRow: {
-    gap: 8,
+    gap: theme.spacing.s,
   },
   detectionItem: {
-    gap: 8,
+    gap: theme.spacing.s,
   },
   detectionLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#00cc6f",
+    color: "#FFFFFF",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   detectionBar: {
     height: 12,
-    backgroundColor: "#2a2a2a",
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
     borderRadius: 6,
     overflow: "hidden",
+    borderWidth: 0.5,
+    borderColor: "rgba(0, 255, 136, 0.2)",
   },
   detectionBarFill: {
     height: "100%",
-    backgroundColor: "#00ff88",
+    backgroundColor: theme.colors.neonAccent,
     borderRadius: 6,
   },
   detectionValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#00ff88",
+    color: theme.colors.neonAccent,
+    letterSpacing: -0.3,
   },
   detectionMethodText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#cccccc",
+    color: "rgba(255, 255, 255, 0.8)",
   },
 
   // Camera Styles
@@ -2944,43 +3174,67 @@ const styles = StyleSheet.create({
   cameraControls: {
     flex: 1,
     justifyContent: "space-between",
-    paddingTop: 16,
-    paddingBottom: 40,
+    paddingTop: theme.spacing.m,
+    paddingBottom: theme.spacing.xl,
   },
   cameraTopBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: theme.spacing.l,
+    paddingVertical: theme.spacing.m,
   },
   cameraCancelButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
     justifyContent: "center",
     alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.5,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   cameraTimer: {
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    paddingHorizontal: theme.spacing.m,
+    paddingVertical: theme.spacing.s,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   cameraBottomBar: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    paddingBottom: 20,
+    paddingBottom: theme.spacing.l,
   },
   cameraRecordButton: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     justifyContent: "center",
     alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   cameraRecordCircle: {
     width: 64,
@@ -2991,15 +3245,26 @@ const styles = StyleSheet.create({
   cameraStopButton: {
     width: 80,
     height: 80,
-    borderRadius: 8,
-    backgroundColor: "rgba(255, 59, 48, 0.3)",
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 59, 48, 0.2)",
     justifyContent: "center",
     alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   cameraStopSquare: {
     width: 50,
     height: 50,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: "#ff3b30",
   },
   cameraGridOverlay: {
@@ -3011,36 +3276,44 @@ const styles = StyleSheet.create({
   },
   cameraGridLineHorizontal: {
     height: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
   },
   cameraGridLineVertical: {
     position: "absolute",
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
   },
   focusTapLayer: {
     ...StyleSheet.absoluteFillObject,
   },
   focusSquare: {
     position: "absolute",
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "rgba(0, 255, 136, 0.85)",
-    backgroundColor: "rgba(0, 0, 0, 0.1)",
+    borderRadius: 14,
+    borderWidth: 2.5,
+    borderColor: `${theme.colors.neonAccent}E6`,
+    backgroundColor: `${theme.colors.neonAccent}0D`,
     justifyContent: "center",
     alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: theme.colors.neonAccent,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+      },
+    }),
   },
   focusCenterDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "rgba(0, 255, 136, 0.9)",
+    backgroundColor: theme.colors.neonAccent,
   },
   focusHintContainer: {
     position: "absolute",
-    top: 80,
+    top: 120,
     left: 0,
     right: 0,
     alignItems: "center",
@@ -3049,24 +3322,37 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 12,
     fontWeight: "700",
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingHorizontal: theme.spacing.m,
+    paddingVertical: theme.spacing.s,
+    borderRadius: 10,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   cameraOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    backgroundColor: "rgba(0, 0, 0, 0.85)",
     justifyContent: "center",
     alignItems: "center",
   },
   cameraContent: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: theme.colors.navCard,
+    borderRadius: 24,
+    padding: theme.spacing.l,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(0, 255, 136, 0.2)",
+    borderColor: "rgba(255, 255, 255, 0.05)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
 });
