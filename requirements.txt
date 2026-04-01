@@ -16,6 +16,7 @@ opencv-python==4.8.1.78
 seaborn==0.13.2
 xgboost==2.0.3
 ultralytics
+tensorflow>=2.13.0     # For video classifier training
 matplotlib==3.8.2      # For 3D plotting
 Pillow==10.1.0         # For GIF generation
 
