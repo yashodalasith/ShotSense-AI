@@ -49,7 +49,7 @@ RANDOM_FOREST_PARAMS = {
 DATASET_PATH = "datasets/cricket-shots" 
 BALL_DATASET_PATH = "datasets/ball_detection"
 MODEL_PATH = "features/SHOT_CLASSIFICATION_SYSTEM/trained_models/rf_model.pkl"
-MODEL_FOLDER_PATH = "features/SHOT_CLASSIFICATION_SYSTEM/trained_models"
+MODEL_FOLDER_PATH = "/content/drive/MyDrive/shot_models"
 SCALER_PATH = "features/SHOT_CLASSIFICATION_SYSTEM/trained_models/scaler.pkl"
 SUPPORTED_VIDEO_EXTENSIONS = ('.mp4', '.avi', '.mov', '.mkv')
 
