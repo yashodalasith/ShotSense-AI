@@ -19,9 +19,11 @@ import ctypes
 from tensorflow import keras
 from tensorflow.keras import layers, models
 from tensorflow.keras.applications import EfficientNetB4
+from tensorflow.keras.applications.efficientnet import preprocess_input
 from tensorflow.keras.optimizers import Adam
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
 import joblib
 from typing import Dict, Tuple, List
 from datetime import datetime
@@ -49,7 +51,7 @@ class VideoClassifierTrainer:
     FRAME_SIZE = (224, 224)  # EfficientNet input size
     BATCH_SIZE = 16
     EPOCHS = 20
-    LEARNING_RATE = 0.001
+    LEARNING_RATE = 0.0003
     VALIDATION_SPLIT = 0.2
     
     def __init__(self, model_dir: str = MODEL_FOLDER_PATH):
@@ -198,7 +200,8 @@ class VideoClassifierTrainer:
         """Load and normalize a single video into (30, 224, 224, 3) float32."""
         video_path = path_bytes.decode("utf-8")
         frames = self.extract_30_frames(video_path)
-        return frames.astype(np.float32) / 255.0
+        # Match ImageNet preprocessing expected by EfficientNet weights.
+        return preprocess_input(frames.astype(np.float32))
 
     def _get_available_memory_gb(self) -> float:
         """Return currently available system RAM in GB (best effort)."""
@@ -304,12 +307,10 @@ class VideoClassifierTrainer:
         
         # Build model with TimeDistributed processing
         model = models.Sequential([
+            layers.Input(shape=(self.FRAME_COUNT, self.FRAME_SIZE[0], self.FRAME_SIZE[1], 3)),
             # TimeDistributed: Apply EfficientNetB4 to each of 30 frames
             # Input: (batch, 30, 224, 224, 3) -> Output: (batch, 30, feature_maps)
-            layers.TimeDistributed(
-                base_model,
-                input_shape=(None, self.FRAME_SIZE[0], self.FRAME_SIZE[1], 3)
-            ),
+            layers.TimeDistributed(base_model),
             
             # Condense per-frame features
             layers.TimeDistributed(layers.GlobalAveragePooling2D()),
@@ -322,9 +323,9 @@ class VideoClassifierTrainer:
             
             # Dense layers for classification
             layers.Dense(1024, activation='relu'),
-            layers.Dropout(0.5),
-            layers.Dense(512, activation='relu'),
             layers.Dropout(0.3),
+            layers.Dense(512, activation='relu'),
+            layers.Dropout(0.2),
             layers.Dense(num_classes, activation='softmax')
         ])
         
@@ -360,6 +361,13 @@ class VideoClassifierTrainer:
         
         y_encoded = self.label_encoder.fit_transform(y)
         num_classes = len(self.label_encoder.classes_)
+
+        class_weights_np = compute_class_weight(
+            class_weight='balanced',
+            classes=np.unique(y_encoded),
+            y=y_encoded
+        )
+        class_weight = {int(i): float(w) for i, w in enumerate(class_weights_np)}
         
         # Split dataset
         paths_train, paths_val, y_train, y_val = train_test_split(
@@ -412,10 +420,17 @@ class VideoClassifierTrainer:
         
         reduce_lr = keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
-            factor=0.2,
-            patience=3,
+            factor=0.5,
+            patience=2,
             verbose=1,
             min_lr=1e-6
+        )
+
+        early_stop = keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=5,
+            restore_best_weights=True,
+            verbose=1
         )
         
         # Train
@@ -424,7 +439,8 @@ class VideoClassifierTrainer:
             epochs=self.EPOCHS,
             initial_epoch=resume_epoch,
             validation_data=val_ds,
-            callbacks=[checkpoint, intermediate_checkpoint, reduce_lr],
+            class_weight=class_weight,
+            callbacks=[checkpoint, intermediate_checkpoint, reduce_lr, early_stop],
             verbose=1
         )
         
@@ -475,7 +491,7 @@ class VideoClassifierTrainer:
 
             batch_frames = []
             for p in batch_paths:
-                frames = self.extract_30_frames(str(p)).astype(np.float32) / 255.0
+                frames = preprocess_input(self.extract_30_frames(str(p)).astype(np.float32))
                 batch_frames.append(frames)
 
             batch_frames = np.array(batch_frames, dtype=np.float32)
