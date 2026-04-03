@@ -561,8 +561,12 @@ class VideoClassifierTrainer:
         print(f"✓ Model saved: {model_path}")
         
         # Save label encoder
-        le_path = f"{self.model_dir}/ensemble/label_encoder.pkl"
+        le_dir = os.path.join(self.model_dir, "ensemble")
+        os.makedirs(le_dir, exist_ok=True)
+        
+        le_path = os.path.join(le_dir, "label_encoder.pkl")
         joblib.dump(self.label_encoder, le_path)
+        
         print(f"✓ Label encoder saved: {le_path}")
         
         # Save metadata
