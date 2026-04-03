@@ -444,15 +444,9 @@ class VideoClassifierTrainer:
             verbose=1
         )
         
-        # Clean up intermediate checkpoints
-        import shutil
-        if os.path.exists(temp_checkpoint_dir):
-            shutil.rmtree(temp_checkpoint_dir)
-            print(f"✓ Cleaned up temporary checkpoints")
-        
         print("\n✓ Training completed")
         
-        return history, paths_train, paths_val, y_train, y_val
+        return history, paths_train, paths_val, y_train, y_val, temp_checkpoint_dir
     
     # ════════════════════════════════════════════════════════════════
     # PROTOTYPE EXTRACTION
@@ -559,9 +553,11 @@ class VideoClassifierTrainer:
         print("SAVING MODELS")
         print("="*70)
         
-        # Save model
-        model_path = f"{self.model_dir}/video_classifier/model.h5"
+        # Save model in native Keras format for safer serialization.
+        model_path = f"{self.model_dir}/video_classifier/model.keras"
         self.model.save(model_path)
+        # Verify the saved model can be loaded before considering save successful.
+        keras.models.load_model(model_path)
         print(f"✓ Model saved: {model_path}")
         
         # Save label encoder
@@ -598,7 +594,7 @@ class VideoClassifierTrainer:
         video_paths, y = self.prepare_dataset(dataset_path, shot_types)
         
         # Step 2: Train model
-        history, paths_train, paths_val, y_train, y_val = self.train(video_paths, y)
+        history, paths_train, paths_val, y_train, y_val, temp_checkpoint_dir = self.train(video_paths, y)
         
         # Step 3: Load best weights into current model
         self.model.load_weights(
@@ -621,6 +617,12 @@ class VideoClassifierTrainer:
         
         # Step 6: Save models
         self.save_models(shot_types)
+
+        # Step 7: Clean up intermediate checkpoints only after successful final save
+        import shutil
+        if os.path.exists(temp_checkpoint_dir):
+            shutil.rmtree(temp_checkpoint_dir)
+            print("✓ Cleaned up temporary checkpoints")
         
         print("\n" + "="*80)
         print(" ✓ TRAINING COMPLETE")
