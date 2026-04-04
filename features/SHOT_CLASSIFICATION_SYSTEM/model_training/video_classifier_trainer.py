@@ -317,8 +317,8 @@ class VideoClassifierTrainer:
             # Output: (batch, 30, 1280) - per-frame feature vectors
             
             # GRU layers to capture temporal dependencies
-            layers.GRU(256, return_sequences=True, dropout=0.3),
-            layers.GRU(128, dropout=0.3),
+            layers.GRU(256, return_sequences=True, dropout=0.3, unroll=True),
+            layers.GRU(128, dropout=0.3, unroll=True),
             # Output: (batch, 128) - aggregated temporal features
             
             # Dense layers for classification
@@ -553,20 +553,18 @@ class VideoClassifierTrainer:
         print("SAVING MODELS")
         print("="*70)
         
+        model_path = f"{self.model_dir}/video_classifier/model.weights.h5"
+        self.model.save_weights(model_path)
         # Save model in native Keras format for safer serialization.
-        model_path = f"{self.model_dir}/video_classifier/model.keras"
-        self.model.save(model_path)
+        # model_path = f"{self.model_dir}/video_classifier/model.keras"
+        # self.model.save(model_path)
         # Verify the saved model can be loaded before considering save successful.
-        keras.models.load_model(model_path)
-        print(f"✓ Model saved: {model_path}")
+        # keras.models.load_model(model_path)
+        # print(f"✓ Model saved: {model_path}")
         
         # Save label encoder
-        le_dir = os.path.join(self.model_dir, "ensemble")
-        os.makedirs(le_dir, exist_ok=True)
-        
-        le_path = os.path.join(le_dir, "label_encoder.pkl")
+        le_path = f"{self.model_dir}/video_classifier/label_encoder.pkl"
         joblib.dump(self.label_encoder, le_path)
-        
         print(f"✓ Label encoder saved: {le_path}")
         
         # Save metadata
@@ -608,14 +606,14 @@ class VideoClassifierTrainer:
         
         # Step 4: Extract prototypes
         prototypes = self.extract_prototypes(video_paths, y)
-        proto_path = f"{self.model_dir}/prototypes/shot_prototypes.pkl"
+        proto_path = f"{self.model_dir}/video_classifier/shot_prototypes.pkl"
         os.makedirs(os.path.dirname(proto_path), exist_ok=True)
         joblib.dump(prototypes, proto_path)
         print(f"✓ Prototypes saved: {proto_path}")
         
         # Step 5: Calculate feature importance
         feature_importance = self.calculate_feature_importance(len(shot_types))
-        fi_path = f"{self.model_dir}/prototypes/feature_importance.pkl"
+        fi_path = f"{self.model_dir}/video_classifier/feature_importance.pkl"
         joblib.dump(feature_importance, fi_path)
         print(f"✓ Feature importance saved: {fi_path}")
         
