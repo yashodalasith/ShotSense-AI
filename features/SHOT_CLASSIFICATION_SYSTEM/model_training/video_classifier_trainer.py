@@ -645,6 +645,7 @@ class VideoClassifierTrainer:
             f"{self.model_dir}/video_classifier/best_model.weights.h5"
         )
         print("\n✓ Loaded best model weights from checkpoint")
+        self.save_compiled_model(len(shot_types))
         
         # Step 4: Extract prototypes
         prototypes = self.extract_prototypes(video_paths, y)

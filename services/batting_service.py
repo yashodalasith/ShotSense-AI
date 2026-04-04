@@ -11,6 +11,7 @@ import tempfile
 import shutil
 from typing import Dict, List, Optional
 from google import genai
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, models
 from tensorflow.keras.applications import EfficientNetB4
@@ -19,10 +20,6 @@ from tensorflow.keras.applications.efficientnet import preprocess_input
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.frame_extractor import FrameExtractor
-from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.pose_estimator import PoseEstimator
-from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.temporal_feature_engineer import TemporalFeatureEngineer
-from features.SHOT_CLASSIFICATION_SYSTEM.utils.model_based_mistake_analyzer import ModelBasedMistakeAnalyzer
 from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.skeleton_animator import SkeletonAnimator
 from features.SHOT_CLASSIFICATION_SYSTEM.utils.config import (
     MODEL_FOLDER_PATH,
@@ -41,9 +38,14 @@ class EfficientNetVideoClassifier:
     MIN_FRAME_COUNT = 20
     FRAME_SIZE = (224, 224)
 
+    def _log(self, message: str):
+        print(f"[EfficientNetMode] {message}", flush=True)
+
     def __init__(self, model_dir: str):
         self.model_dir = model_dir
         self.video_model_dir = os.path.join(model_dir, "video_classifier")
+
+        self._log("Initializing cached EfficientNetB4 + GRU model")
 
         metadata_path = os.path.join(self.video_model_dir, "metadata.pkl")
         if os.path.exists(metadata_path):
@@ -54,13 +56,27 @@ class EfficientNetVideoClassifier:
         else:
             self.shot_types = SHOT_TYPES
 
-        self.model = self._build_model(num_classes=len(self.shot_types))
-        self._load_weights()
+        self._log(f"Looking for cached model at {os.path.join(self.video_model_dir, 'model_complete.keras')}")
+        self.model = self._load_cached_model()
+        if self.model is None:
+            self._log("Cache unavailable, rebuilding architecture from weights")
+            self.model = self._build_model(num_classes=len(self.shot_types))
+            self._load_weights()
+        else:
+            self._log("Cached model loaded successfully")
 
-        self.feature_extractor = models.Model(
-            inputs=self.model.input,
-            outputs=self.model.layers[4].output,
+        self._ensure_model_built()
+        self._log("Preparing feature extractor")
+
+        feature_input = keras.Input(
+            shape=(self.FRAME_COUNT, self.FRAME_SIZE[0], self.FRAME_SIZE[1], 3)
         )
+        feature_output = feature_input
+        for layer in self.model.layers[:5]:
+            feature_output = layer(feature_output)
+
+        self.feature_extractor = models.Model(feature_input, feature_output)
+        self._log("Feature extractor ready")
 
         self.prototypes = self._load_prototypes()
         self.feature_importance = self._load_feature_importance()
@@ -93,19 +109,23 @@ class EfficientNetVideoClassifier:
         )
         return model
 
-    def _load_weights(self):
+    def _load_cached_model(self):
         cache_path = os.path.join(self.video_model_dir, "model_complete.keras")
-        
-        # Try loading pre-compiled cached model first (fastest path)
-        if os.path.exists(cache_path):
-            try:
-                self.model = keras.models.load_model(cache_path)
-                print(f"✓ Loaded pre-compiled model from cache (skipped rebuild)")
-                return
-            except Exception as e:
-                print(f"⚠ Cache load failed ({e}), rebuilding from weights...")
-        
-        # Fallback: load weights into rebuilt architecture
+        if not os.path.exists(cache_path):
+            self._log("Cached model file not found")
+            return None
+
+        try:
+            self._log("Loading cached compiled model")
+            model = keras.models.load_model(cache_path)
+            print("✓ Loaded pre-compiled model from cache (skipped rebuild)")
+            return model
+        except Exception as e:
+            print(f"⚠ Cache load failed ({e}), rebuilding from weights...")
+            return None
+
+    def _load_weights(self):
+        # Fallback: load weights into rebuilt architecture.
         best_path = os.path.join(self.video_model_dir, "best_model.weights.h5")
         model_path = os.path.join(self.video_model_dir, "model.weights.h5")
 
@@ -116,16 +136,41 @@ class EfficientNetVideoClassifier:
                 "Expected best_model.weights.h5 or model.weights.h5"
             )
 
+        self._log(f"Loading weights from {selected_path}")
+
         try:
             self.model.load_weights(selected_path)
+            self._log("Weights loaded successfully")
             return
         except ValueError:
             # Keras 3 may treat .weights.h5 as non-legacy format.
             # Create a temporary .h5 copy and load by_name for legacy compatibility.
+            self._log("Retrying weight load through legacy .h5 compatibility path")
             with tempfile.TemporaryDirectory() as tmp_dir:
                 legacy_path = os.path.join(tmp_dir, "legacy_weights.h5")
                 shutil.copyfile(selected_path, legacy_path)
                 self.model.load_weights(legacy_path, by_name=True, skip_mismatch=True)
+            self._log("Legacy-compatible weights loaded successfully")
+
+    def _ensure_model_built(self):
+        """Ensure the loaded Sequential model has a defined input tensor."""
+        expected_shape = (
+            None,
+            self.FRAME_COUNT,
+            self.FRAME_SIZE[0],
+            self.FRAME_SIZE[1],
+            3,
+        )
+
+        try:
+            if not self.model.built:
+                self.model.build(expected_shape)
+        except Exception:
+            pass
+
+        if not getattr(self.model, "inputs", None):
+            dummy_input = tf.zeros((1, self.FRAME_COUNT, self.FRAME_SIZE[0], self.FRAME_SIZE[1], 3), dtype=tf.float32)
+            _ = self.model(dummy_input, training=False)
 
     def _load_prototypes(self) -> Dict[str, Dict]:
         path = os.path.join(self.video_model_dir, "shot_prototypes.pkl")
@@ -159,6 +204,7 @@ class EfficientNetVideoClassifier:
         return None
 
     def extract_30_frames(self, video_path: str) -> np.ndarray:
+        self._log(f"Extracting 30 frames from {os.path.basename(video_path)}")
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"Cannot open video: {video_path}")
@@ -194,11 +240,14 @@ class EfficientNetVideoClassifier:
         return frames
 
     def _prepare_input(self, video_path: str) -> np.ndarray:
+        self._log("Preparing normalized model input")
         frames = self.extract_30_frames(video_path).astype(np.float32)
         return preprocess_input(frames)
 
     def predict(self, video_path: str) -> Dict:
+        self._log("Starting shot prediction")
         video_tensor = self._prepare_input(video_path)
+        self._log("Running model inference")
         probs = self.model.predict(np.expand_dims(video_tensor, axis=0), verbose=0)[0]
 
         probs = probs.astype(np.float64)
@@ -208,6 +257,8 @@ class EfficientNetVideoClassifier:
 
         pred_idx = int(np.argmax(probs))
         predicted_shot = self.shot_types[pred_idx]
+
+        self._log(f"Prediction complete: {predicted_shot}")
 
         return {
             'final_prediction': predicted_shot,
@@ -221,11 +272,13 @@ class EfficientNetVideoClassifier:
         }
 
     def extract_embedding(self, video_path: str) -> np.ndarray:
+        self._log("Extracting embedding from GRU stack")
         video_tensor = self._prepare_input(video_path)
         embedding = self.feature_extractor.predict(
             np.expand_dims(video_tensor, axis=0),
             verbose=0,
         )[0]
+        self._log("Embedding extraction complete")
         return embedding.astype(np.float32)
 
 
@@ -284,6 +337,11 @@ class BattingService:
 
         if self.mode == ANALYZE_SHOT_MODE_LEGACY:
             # Legacy path: full RTMPose + engineered-feature ensemble stack.
+            from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.frame_extractor import FrameExtractor
+            from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.pose_estimator import PoseEstimator
+            from features.SHOT_CLASSIFICATION_SYSTEM.data_preprocessing.temporal_feature_engineer import TemporalFeatureEngineer
+            from features.SHOT_CLASSIFICATION_SYSTEM.utils.model_based_mistake_analyzer import ModelBasedMistakeAnalyzer
+
             self.models = self._load_models()
             self.scaler = joblib.load(f"{model_dir}/ensemble/scaler.pkl")
             self.label_encoder = joblib.load(f"{model_dir}/ensemble/label_encoder.pkl")
@@ -302,6 +360,7 @@ class BattingService:
             )
         else:
             # New path: EfficientNetB4 + GRU only; no YOLO/RTMPose initialization.
+            print("[EfficientNetMode] BattingService running in mode 1 (EfficientNetB4 + GRU)", flush=True)
             self.video_classifier = EfficientNetVideoClassifier(model_dir=model_dir)
         
         # AI feedback
@@ -350,7 +409,9 @@ class BattingService:
 
     def process_video_new(self, video_path: str) -> Dict:
         """Process video using EfficientNetB4 + GRU pipeline only."""
+        print("[EfficientNetMode] Processing video for mode 1 analysis", flush=True)
         prediction = self.video_classifier.predict(video_path)
+        print("[EfficientNetMode] Prediction done, extracting embedding", flush=True)
         embedding = self.video_classifier.extract_embedding(video_path)
 
         return {
@@ -425,8 +486,10 @@ class BattingService:
     def analyze_execution_new(self, intended_shot: str, predicted_shot: str,
                               embedding: np.ndarray) -> List[Dict]:
         """Embedding-based mistake analysis for EfficientNetB4 + GRU mode."""
+        print("[EfficientNetMode] Running embedding-based mistake analysis", flush=True)
         prototypes = self.video_classifier.prototypes
         if intended_shot not in prototypes:
+            print("[EfficientNetMode] No prototype found for intended shot", flush=True)
             return []
 
         target = prototypes[intended_shot].get('features', {}).get('mean')
@@ -782,6 +845,9 @@ Be direct, supportive, coaching-focused and technically accurate. No bullet poin
                 mistakes, intended_shot
             )
             analysis_method = 'efficientnetb4_gru_embedding'
+
+        if self.mode == ANALYZE_SHOT_MODE_NEW:
+            print("[EfficientNetMode] Finalizing analysis response", flush=True)
         
         # Calculate intent score
         intent_score = self.calculate_intent_score(

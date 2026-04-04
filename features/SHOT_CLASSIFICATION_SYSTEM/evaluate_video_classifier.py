@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Dict, Any
 
 import numpy as np
+import tensorflow as tf
+from tensorflow import keras
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score,
@@ -114,6 +116,34 @@ def load_weights_with_fallback(model, model_dir: str) -> str:
     )
 
 
+def load_cached_model(model_dir: str):
+    cache_path = os.path.join(model_dir, "video_classifier", "model_complete.keras")
+    if not os.path.exists(cache_path):
+        return None, cache_path
+
+    try:
+        model = keras.models.load_model(cache_path)
+        print(f"✓ Loaded cached complete model: {cache_path}")
+        return model, cache_path
+    except Exception as e:
+        print(f"⚠ Failed to load cached model ({e}); will rebuild from weights")
+        return None, cache_path
+
+
+def ensure_model_built(model, frame_count: int, frame_size: tuple[int, int]):
+    expected_shape = (None, frame_count, frame_size[0], frame_size[1], 3)
+
+    try:
+        if not model.built:
+            model.build(expected_shape)
+    except Exception:
+        pass
+
+    if not getattr(model, "inputs", None):
+        dummy_input = tf.zeros((1, frame_count, frame_size[0], frame_size[1], 3), dtype=tf.float32)
+        _ = model(dummy_input, training=False)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate EfficientNetB4 + GRU video classifier")
     parser.add_argument("--dataset", type=str, default=DATASET_PATH, help="Dataset root containing shot folders")
@@ -160,16 +190,24 @@ def main():
     print(f"\nTrain samples: {len(paths_train)}")
     print(f"Test samples : {len(paths_test)}")
 
-    model = trainer.build_model(num_classes=len(trainer.label_encoder.classes_))
-    loaded_from = load_weights_with_fallback(model, args.model_dir)
-    print(f"Loaded weights: {loaded_from}")
-    
-    # Save complete model (architecture + loaded weights) for faster future loads
-    try:
-        trainer.model = model
-        trainer.save_compiled_model(len(trainer.label_encoder.classes_))
-    except Exception as e:
-        print(f"⚠ Could not cache model: {e}")
+    model, cache_path = load_cached_model(args.model_dir)
+    loaded_from = cache_path if model is not None else None
+
+    if model is None:
+        model = trainer.build_model(num_classes=len(trainer.label_encoder.classes_))
+        loaded_from = load_weights_with_fallback(model, args.model_dir)
+        print(f"Loaded weights: {loaded_from}")
+
+        # Save complete model (architecture + loaded weights) for faster future loads
+        try:
+            trainer.model = model
+            trainer.save_compiled_model(len(trainer.label_encoder.classes_))
+        except Exception as e:
+            print(f"⚠ Could not cache model: {e}")
+    else:
+        print(f"Using cached complete model: {loaded_from}")
+
+    ensure_model_built(model, trainer.FRAME_COUNT, trainer.FRAME_SIZE)
 
     train_metrics = evaluate_split(trainer, model, paths_train, y_train, "train")
     test_metrics = evaluate_split(trainer, model, paths_test, y_test, "test")
