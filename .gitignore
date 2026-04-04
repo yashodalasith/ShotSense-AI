@@ -78,6 +78,12 @@ wandb/
 *.npz
 *.npy
 
-# Ignore everything inside trained_models
-trained_models/
+# Ignore everything inside trained_models (correct path)
+features/SHOT_CLASSIFICATION_SYSTEM/trained_models/*
+
+# BUT keep the video_classifier folder
+!features/SHOT_CLASSIFICATION_SYSTEM/trained_models/video_classifier/
+
+# Keep all files inside it
+!features/SHOT_CLASSIFICATION_SYSTEM/trained_models/video_classifier/**
 debug_contact_frames/

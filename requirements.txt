@@ -17,6 +17,7 @@ seaborn==0.13.2
 xgboost==2.0.3
 ultralytics
 tensorflow>=2.13.0     # For video classifier training
+optree==0.13.1         # Avoids Windows access violation seen with newer optree wheels
 matplotlib==3.8.2      # For 3D plotting
 Pillow==10.1.0         # For GIF generation
 

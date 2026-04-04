@@ -544,6 +544,48 @@ class VideoClassifierTrainer:
         return importance
     
     # ════════════════════════════════════════════════════════════════
+    # MODEL CACHING (save/load complete model with architecture+weights)
+    # ════════════════════════════════════════════════════════════════
+    
+    def save_compiled_model(self, num_classes: int):
+        """
+        Save the complete compiled model (architecture + weights) to .keras format.
+        This allows future loads to skip architecture rebuild and directly load.
+        
+        Call this once after build_model() and load_weights().
+        Use load_compiled_model() to load it back without rebuilding.
+        """
+        model_cache_dir = f"{self.model_dir}/video_classifier"
+        model_cache_path = f"{model_cache_dir}/model_complete.keras"
+        
+        if not hasattr(self, 'model') or self.model is None:
+            raise RuntimeError("No model to save. Call build_model() first.")
+        
+        os.makedirs(model_cache_dir, exist_ok=True)
+        self.model.save(model_cache_path)
+        print(f"✓ Complete model saved (architecture + weights): {model_cache_path}")
+        return model_cache_path
+    
+    def load_compiled_model(self) -> keras.Model:
+        """
+        Load a pre-built, pre-compiled model from cache.
+        Returns None if cache doesn't exist (caller should then build_model + load_weights).
+        """
+        model_cache_path = f"{self.model_dir}/video_classifier/model_complete.keras"
+        
+        if not os.path.exists(model_cache_path):
+            return None
+        
+        try:
+            model = keras.models.load_model(model_cache_path)
+            self.model = model
+            print(f"✓ Loaded pre-compiled model from cache: {model_cache_path}")
+            return model
+        except Exception as e:
+            print(f"⚠ Failed to load cached model ({e}). Will rebuild.")
+            return None
+    
+    # ════════════════════════════════════════════════════════════════
     # SAVE/LOAD MODELS
     # ════════════════════════════════════════════════════════════════
     

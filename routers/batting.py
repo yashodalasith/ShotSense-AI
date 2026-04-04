@@ -10,7 +10,11 @@ import os
 import tempfile
 from typing import Optional
 
-from features.SHOT_CLASSIFICATION_SYSTEM.utils.config import SUPPORTED_VIDEO_EXTENSIONS, supported_extensions_str
+from features.SHOT_CLASSIFICATION_SYSTEM.utils.config import (
+    SUPPORTED_VIDEO_EXTENSIONS,
+    supported_extensions_str,
+    ANALYZE_SHOT_MODE_DEFAULT,
+)
 from services.batting_service import get_batting_service
 
 router = APIRouter(prefix="/batting", tags=["Batting Analysis"])
@@ -40,7 +44,8 @@ async def get_shot_types():
 @router.post("/analyze-shot")
 async def analyze_shot(
     video: UploadFile = File(..., description="Cricket shot video"),
-    intended_shot: str = Form(..., description="User's intended shot type")
+    intended_shot: str = Form(..., description="User's intended shot type"),
+    mode: str = Form(str(ANALYZE_SHOT_MODE_DEFAULT), description="1/new or 2/legacy")
 ):
     """
     Analyze cricket shot with intent-based scoring
@@ -76,7 +81,7 @@ async def analyze_shot(
             temp_video_path = temp_file.name
         
         # Get service and analyze
-        service = get_batting_service()
+        service = get_batting_service(mode=mode)
         result = service.analyze_shot(temp_video_path, intended_shot)
         
         return {
@@ -98,7 +103,8 @@ async def analyze_shot(
 @router.post("/batch-analyze")
 async def batch_analyze_shots(
     videos: list[UploadFile] = File(..., description="Multiple cricket shot videos"),
-    intended_shots: str = Form(..., description="Comma-separated intended shots")
+    intended_shots: str = Form(..., description="Comma-separated intended shots"),
+    mode: str = Form(str(ANALYZE_SHOT_MODE_DEFAULT), description="1/new or 2/legacy")
 ):
     """
     Analyze multiple shots in batch
@@ -122,7 +128,7 @@ async def batch_analyze_shots(
             )
         
         results = []
-        service = get_batting_service()
+        service = get_batting_service(mode=mode)
         
         # Process each video
         for video, intended_shot in zip(videos, intended_shot_list):
